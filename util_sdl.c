@@ -55,6 +55,13 @@ SOFTWARE.
         sdl_event_max = 0; \
     } while (0)
 
+#define ENABLE_BUTTON_SOUND
+
+#define min(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a < _b ? _a : _b; })
+
 //
 // typedefs
 //
@@ -77,6 +84,7 @@ typedef struct {
 
 static SDL_Window     * sdl_window;
 static SDL_Renderer   * sdl_renderer;
+static SDL_RendererInfo sdl_renderer_info;
 static int32_t          sdl_win_width;
 static int32_t          sdl_win_height;
 static bool             sdl_win_minimized;
@@ -115,7 +123,7 @@ static void sdl_set_color(int32_t color);
 
 // -----------------  SDL INIT & CLOSE  --------------------------------- 
 
-int32_t sdl_init(uint32_t w, uint32_t h, char * screenshot_prefix)
+int32_t sdl_init(uint32_t w, uint32_t h, char * screenshot_prefix, int32_t * max_texture_dim)
 {
     #define SDL_FLAGS SDL_WINDOW_RESIZABLE
     #define MAX_FONT_SEARCH_PATH 3
@@ -152,7 +160,7 @@ int32_t sdl_init(uint32_t w, uint32_t h, char * screenshot_prefix)
     SDL_GetWindowSize(sdl_window, &sdl_win_width, &sdl_win_height);
     INFO("sdl_win_width=%d sdl_win_height=%d\n", sdl_win_width, sdl_win_height);
 
-#if 1
+#ifdef ENABLE_BUTTON_SOUND
     // init button_sound
     if (Mix_OpenAudio( 22050, MIX_DEFAULT_FORMAT, 2, 4096) < 0) {
         WARN("Mix_OpenAudio failed\n");
@@ -227,6 +235,22 @@ int32_t sdl_init(uint32_t w, uint32_t h, char * screenshot_prefix)
     TTF_SetFontStyle(sdl_font[1].font_underline, TTF_STYLE_UNDERLINE|TTF_STYLE_BOLD);
     INFO("font1 psize=%d width=%d height=%d\n", 
          font1_ptsize, sdl_font[1].char_width, sdl_font[1].char_height);
+
+    // return the max texture dimension to caller;
+    // - SDL provides us with max_texture_width and max_texture_height, usually the same
+    // - the min of max_texture_width/height is returned to caller
+    // - this returned max_texture_dim is to be used by the caller to limit the maximum
+    //   width and height args passed to sdl_create_yuy2_texture()
+    if (SDL_GetRendererInfo(sdl_renderer, &sdl_renderer_info) != 0) {
+        ERROR("SDL_SDL_GetRendererInfo failed\n");
+        return -1;
+    }
+    INFO("max_texture_width=%d  max_texture_height=%d\n",
+         sdl_renderer_info.max_texture_width, sdl_renderer_info.max_texture_height);
+    if (max_texture_dim) {
+        *max_texture_dim = min(sdl_renderer_info.max_texture_width, 
+                               sdl_renderer_info.max_texture_height);
+    }
 
     // register exit handler
     atexit(sdl_exit_handler);
@@ -992,7 +1016,7 @@ texture_t sdl_create_yuy2_texture(int32_t w, int32_t h)
                                 SDL_TEXTUREACCESS_STREAMING,
                                 w, h);
     if (texture == NULL) {
-        ERROR("failed to allocate texture\n");
+        ERROR("failed to allocate texture, %s\n", SDL_GetError());
         return NULL;
     }
 
