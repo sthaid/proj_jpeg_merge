@@ -112,8 +112,8 @@ int main(int argc, char **argv)
         }
         switch (opt_char) {
         case 'g':
-            if (sscanf(optarg, "%dx%d", &image_width, &image_height) != 1) {
-                FATAL("invalid '-c %s'\n", optarg);
+            if (sscanf(optarg, "%dx%d", &image_width, &image_height) != 2) {
+                FATAL("invalid '-g %s'\n", optarg);
             }
             break;
         case 'c':
