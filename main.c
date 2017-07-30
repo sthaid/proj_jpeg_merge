@@ -62,11 +62,6 @@ SOFTWARE.
 #include "util_jpeg_decode.h"
 #include "util_misc.h"
 
-// XXX TODO
-// - README.md   + future enhancements
-// - sample output
-// - push
-
 // 
 // defines
 //
@@ -95,6 +90,7 @@ int32_t  cols, rows;
 uint32_t win_width, win_height;
 image_t  image[MAX_IMAGE];
 int32_t  max_image;
+int32_t  max_texture_dim;
 
 // 
 // prototypes
@@ -121,7 +117,9 @@ int main(int argc, char **argv)
             }
             break;
         case 'c':
-            if (sscanf(optarg, "%d", &cols) != 1) {
+            if (sscanf(optarg, "%d", &cols) != 1 ||
+                cols < 1 || cols > MAX_COLS) 
+            {
                 FATAL("invalid '-c %s'\n", optarg);
             }
             break;
@@ -136,10 +134,36 @@ int main(int argc, char **argv)
         }
     }
 
-    // XXX check options
+    // determine:
+    // - max_image,
+    // - cols, rows,
+    // - wind_width, win_height
+    max_image = argc - optind;
+    if (cols == 0) {
+        cols = (max_image == 1 ? 1 :
+                max_image == 2 ? 2 :
+                max_image == 3 ? 3 :
+                max_image == 4 ? 2 :
+                max_image == 5 ? 3 :
+                max_image == 6 ? 3 :
+                max_image == 7 ? 4 :
+                max_image == 8 ? 4 :
+                max_image == 9 ? 3 :
+                                 4);
+    }
+    rows = ceil((double)max_image / cols);
+    if (rows == 0) {
+        rows = 1;
+    }
+    win_width = (image_width + PANE_BORDER_WIDTH) * cols + PANE_BORDER_WIDTH;
+    win_height = (image_height + PANE_BORDER_WIDTH) * rows + PANE_BORDER_WIDTH;
+
+    // sdl init
+    if (sdl_init(win_width, win_height, NULL, &max_texture_dim) < 0) {
+        FATAL("sdl_init %dx%d failed\n", win_width, win_height);
+    }
 
     // read all jpeg files, and convert to yuy2 image
-    max_image = argc - optind;
     for (i = 0; i < max_image; i++) {
         int32_t fd;
         char * fn;
@@ -171,7 +195,8 @@ int main(int argc, char **argv)
 
         ret = jpeg_decode(0, JPEG_DECODE_MODE_YUY2,
                           jpeg_file_data, jpeg_file_data_len,                     // jpeg
-                          &image[i].pixels, &image[i].width, &image[i].height);   // pixels
+                          &image[i].pixels, &image[i].width, &image[i].height,    // pixels
+                          max_texture_dim);
         if (ret != 0) {
             FATAL("failed to jpeg_decode file %s\n", fn);
         }
@@ -179,33 +204,6 @@ int main(int argc, char **argv)
         INFO("read %s width=%d height=%d\n", fn, image[i].width, image[i].height);
 
         close(fd);
-    }
-
-    // if cols not supplied as an option then pick a reasonable value
-    if (cols == 0) {
-        cols = (max_image == 1 ? 1 :
-                max_image == 2 ? 2 :
-                max_image == 3 ? 3 :
-                max_image == 4 ? 2 :
-                max_image == 5 ? 3 :
-                max_image == 6 ? 3 :
-                max_image == 7 ? 4 :
-                max_image == 8 ? 4 :
-                max_image == 9 ? 3 :
-                                 4);
-    }
-
-    // initialize number of rows, and win_width/height
-    rows = ceil((double)max_image / cols);
-    if (rows == 0) {
-        rows = 1;
-    }
-    win_width = (image_width + PANE_BORDER_WIDTH) * cols + PANE_BORDER_WIDTH;
-    win_height = (image_height + PANE_BORDER_WIDTH) * rows + PANE_BORDER_WIDTH;
-
-    // sdl init
-    if (sdl_init(win_width, win_height, NULL) < 0) {
-        FATAL("sdl_init %dx%d failed\n", win_width, win_height);
     }
 
     // loop until done
@@ -243,12 +241,15 @@ int main(int argc, char **argv)
         sdl_display_init();
         for (i = 0; i < rows*cols; i++) {
             sdl_render_pane_border(&pane_full[i], GREEN);
-            if (i < max_image) {
-                texture = sdl_create_yuy2_texture(image[i].width, image[i].height);
-                sdl_update_yuy2_texture(texture, image[i].pixels, image[i].width);
-                sdl_render_texture(texture, &pane[i]);
-                sdl_destroy_texture(texture);
+            if (i >= max_image) {
+                continue;
             }
+
+            // XXX don't realloc and destroy texture if not needed
+            texture = sdl_create_yuy2_texture(image[i].width, image[i].height);
+            sdl_update_yuy2_texture(texture, image[i].pixels, image[i].width);
+            sdl_render_texture(texture, &pane[i]);
+            sdl_destroy_texture(texture);
         }
         sdl_display_present();
 
