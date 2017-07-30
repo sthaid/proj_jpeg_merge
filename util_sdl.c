@@ -252,6 +252,9 @@ int32_t sdl_init(uint32_t w, uint32_t h, char * screenshot_prefix, int32_t * max
                                sdl_renderer_info.max_texture_height);
     }
 
+    // currently the SDL Text Input feature is not being used here
+    SDL_StopTextInput();
+
     // register exit handler
     atexit(sdl_exit_handler);
 
@@ -577,7 +580,7 @@ sdl_event_t * sdl_poll_event(void)
             int32_t  possible_event = -1;
 
             // use either ctrl-p or alt-p to printscreen, because 
-            // KMOD_CTRL not working on my system  XXX
+            // KMOD_CTRL not working on my fedora-20 system 
             if ((ctrl && key == 'p') || (alt && key == 'p')) {
                 char filename[PATH_MAX];
                 struct tm tm;
@@ -665,7 +668,6 @@ sdl_event_t * sdl_poll_event(void)
             break; }
 
        case SDL_TEXTINPUT:
-            // XXX may want to support this someday
             break;
 
        case SDL_WINDOWEVENT: {
