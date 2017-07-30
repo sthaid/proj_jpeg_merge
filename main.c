@@ -245,7 +245,6 @@ int main(int argc, char **argv)
                 continue;
             }
 
-            // XXX don't realloc and destroy texture if not needed
             texture = sdl_create_yuy2_texture(image[i].width, image[i].height);
             sdl_update_yuy2_texture(texture, image[i].pixels, image[i].width);
             sdl_render_texture(texture, &pane[i]);
