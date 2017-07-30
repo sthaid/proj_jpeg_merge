@@ -41,6 +41,7 @@ SOFTWARE.
 //
 // documentationn: 
 //   http://www.opensource.apple.com/source/tcl/tcl-87/tcl_ext/tkimg/tkimg/libjpeg/libjpeg.doc
+//   https://refspecs.linuxfoundation.org/LSB_4.1.0/LSB-Desktop-generic/LSB-Desktop-generic/libjpegman.html
 //
 
 // defines
@@ -83,8 +84,18 @@ static void jpeg_decode_output_message_override(j_common_ptr cinfo);
 
 // -----------------  JPEG DECODE  ---------------------------------------------------------
 
+// NOTES:
+// - max_image_dim: When this arg is 0 it is not used; otherwise this arg is a 
+//   request that the returned image width and height do not exceed max_image_dim.
+//   The jpeg library image scaling feature is used to accomplish this; however, this
+//   feature does not support reducing the image size by greater than a factor of 8.
+//   For extremely large jpeg images or extremely small max_image_dim, the
+//   scaling will reduce the image by a factor of 8, which may not succeed in 
+//   reducing the returned image's dimensions to less or equal to the max_image_dim.
+
 int32_t jpeg_decode(uint32_t cxid, uint32_t jpeg_decode_mode, uint8_t * jpeg, uint32_t jpeg_size, 
-                    uint8_t ** out_buf, uint32_t * width, uint32_t * height)
+                    uint8_t ** out_buf, uint32_t * width, uint32_t * height,
+                    uint32_t max_image_dim)
 {
     jpeg_decode_cx_t              * cx;
     struct jpeg_decompress_struct * cinfo; 
@@ -173,6 +184,23 @@ int32_t jpeg_decode(uint32_t cxid, uint32_t jpeg_decode_mode, uint8_t * jpeg, ui
     } else {
         cinfo->out_color_space = JCS_YCbCr;
         bytes_per_pixel = 2;
+    }
+
+    // if max image dimension is supplied and the image's width or height 
+    // exceeds the max_image_dim then use the jpeg library to request that 
+    // the decompressed image be scaled down to a smaller size; 
+    // note that the jpeg image library documentation states:
+    // "Currently, the only supported scaling ratios are 1/1, 1/2, 1/4, and 1/8."
+    if (max_image_dim > 0) {
+        if (cinfo->image_width > (max_image_dim*4) || cinfo->image_height > (max_image_dim*4)) {
+            cinfo->scale_denom = 8;
+        } else if (cinfo->image_width > (max_image_dim*2) || cinfo->image_height > (max_image_dim*2)) {
+            cinfo->scale_denom = 4;
+        } else if (cinfo->image_width > (max_image_dim) || cinfo->image_height > (max_image_dim)) {
+            cinfo->scale_denom = 2;
+        } else {
+            cinfo->scale_denom = 1;
+        }
     }
 
     // initialize the decompression, this sets cinfo->output_width and cinfo->output_height
