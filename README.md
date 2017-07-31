@@ -1,6 +1,6 @@
 # OVERVIEW
 
-This program cobines multiple jpeg files into a single png file.
+This program combines multiple jpeg files into a single png file.
 
 Sample out.png is included.
 
@@ -11,7 +11,7 @@ This program does the following:
 
 # FUTURE ENHANCEMENTS
 
-Provide greater flexability in the layout.
+Provide greater flexibility in the layout.
 
 Provide option to output jpeg format.
 
