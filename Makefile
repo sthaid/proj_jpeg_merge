@@ -1,4 +1,4 @@
-TARGETS = jpeg_merge 
+TARGETS = image_merge 
 
 CC = gcc
 OUTPUT_OPTION=-MMD -MP -o $@
@@ -8,7 +8,8 @@ CFLAGS = -c -g -O2 -pthread -fsigned-char -Wall \
 SRC_JPEG_MERGE = main.c \
                  util_sdl.c \
                  util_sdl_predefined_displays.c \
-                 util_jpeg_decode.c \
+                 util_jpeg.c \
+                 util_png.c \
                  util_misc.c
 OBJ_JPEG_MERGE=$(SRC_JPEG_MERGE:.c=.o)
 
@@ -20,7 +21,7 @@ DEP=$(SRC_JPEG_MERGE:.c=.d)
 
 all: $(TARGETS)
 
-jpeg_merge: $(OBJ_JPEG_MERGE) 
+image_merge: $(OBJ_JPEG_MERGE) 
 	$(CC) -pthread -lrt -lm -lpng -ljpeg -lSDL2 -lSDL2_ttf -lSDL2_mixer \
               -o $@ $(OBJ_JPEG_MERGE)
 

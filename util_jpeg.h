@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016 Steven Haid
+Copyright (c) 2017 Steven Haid
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,13 +20,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#ifndef __UTIL_JPEG_DECODE_H__
-#define __UTIL_JPEG_DECODE_H__
+#ifndef __UTIL_JPEG_H__
+#define __UTIL_JPEG_H__
 
-#define JPEG_DECODE_MODE_GS    1
-#define JPEG_DECODE_MODE_YUY2  2
+int32_t read_jpeg_file(char* file_name, int32_t max_image_dim,
+                       uint8_t ** pixels, int32_t * width, int32_t * height);
 
-int32_t jpeg_decode(uint32_t cxid, uint32_t jpeg_decode_mode, uint8_t * jpeg, uint32_t jpeg_size,
-                    uint8_t ** out_buf, uint32_t * width, uint32_t * height, uint32_t max_image_dim);
+int32_t write_jpeg_file(char* file_name,
+                       uint8_t * pixels, int32_t width, int32_t height);
 
 #endif

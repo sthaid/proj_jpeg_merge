@@ -22,11 +22,11 @@ SOFTWARE.
 
 //
 // SYNOPSIS: 
-//     jpeg_merge [OPTIONS] [JPEG_FILES...]
+//     image_merge [OPTIONS] [JPEG_OR_PNG_FILES...]
 // 
 // DESCRIPTION
-//     This program combines jpeg files and writes the combined image to
-//     a png file. The jpeg files are arranged in a grid in the output file.
+//     This program reads jpeg and png files and combines them into a
+//     single png output file.
 // 
 // OPTIONS
 //     -h       : help
@@ -44,6 +44,13 @@ SOFTWARE.
 //     The window can also be resized using the mouse.
 //
 
+//
+// XXX Possible Future Enhancements
+// - add option to set the border color
+// - support layout with double size image at top/left
+// - add option to output in jpeg format
+//
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -51,15 +58,14 @@ SOFTWARE.
 #include <stdarg.h>
 #include <string.h>
 #include <errno.h>
-#include <fcntl.h>
 #include <unistd.h>
 #include <math.h>
-#include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
 #include "util_sdl.h"
-#include "util_jpeg_decode.h"
+#include "util_jpeg.h"
+#include "util_png.h"
 #include "util_misc.h"
 
 // 
@@ -75,8 +81,8 @@ SOFTWARE.
 
 typedef struct {
     uint8_t * pixels;
-    uint32_t  width;
-    uint32_t height;
+    int32_t   width;
+    int32_t   height;
 } image_t;
 
 // 
@@ -87,7 +93,7 @@ int32_t  image_width  = 320;
 int32_t  image_height = 240;
 char     filename_prefix[100] = "out";
 int32_t  cols, rows;
-uint32_t win_width, win_height;
+int32_t  win_width, win_height;
 image_t  image[MAX_IMAGE];
 int32_t  max_image;
 int32_t  max_texture_dim;
@@ -134,11 +140,17 @@ int main(int argc, char **argv)
         }
     }
 
+    // determine number of image filenames supplies, and 
+    // verify at least one has been supplied
+    max_image = argc - optind;
+    if (max_image == 0) {
+        usage();
+        exit(1);
+    }
+
     // determine:
-    // - max_image,
     // - cols, rows,
     // - wind_width, win_height
-    max_image = argc - optind;
     if (cols == 0) {
         cols = (max_image == 1 ? 1 :
                 max_image == 2 ? 2 :
@@ -163,47 +175,30 @@ int main(int argc, char **argv)
         FATAL("sdl_init %dx%d failed\n", win_width, win_height);
     }
 
-    // read all jpeg files, and convert to yuy2 image
+    // read all jpeg / png files
     for (i = 0; i < max_image; i++) {
-        int32_t fd;
-        char * fn;
-        size_t jpeg_file_data_len;
-        uint8_t * jpeg_file_data;
+        char * filename = argv[optind+i];
         struct stat buf;
 
-        fn = argv[optind+i];
-        ret = stat(fn, &buf);
+        ret = stat(filename, &buf);
         if (ret != 0) {
-            FATAL("failed stat of file %s, %s\n", fn, strerror(errno));
-        }
-        jpeg_file_data_len = buf.st_size;
-
-        fd = open(fn, O_RDONLY);
-        if (fd < 0) {
-            FATAL("failed to open file %s, %s\n", fn, strerror(errno));
+            ERROR("failed stat of %s, %s\n", filename, strerror(errno));
+            continue;
         }
 
-        jpeg_file_data = mmap(NULL,  // addr
-                              jpeg_file_data_len,
-                              PROT_READ,
-                              MAP_SHARED,
-                              fd,
-                              0);   // offset
-        if (jpeg_file_data == MAP_FAILED) {
-            FATAL("failed to map file %s, %s\n", fn, strerror(errno));
+        ret = read_png_file(filename, max_texture_dim,
+                            &image[i].pixels, &image[i].width, &image[i].height);
+        if (ret == 0) {
+            continue;
         }
 
-        ret = jpeg_decode(0, JPEG_DECODE_MODE_YUY2,
-                          jpeg_file_data, jpeg_file_data_len,                     // jpeg
-                          &image[i].pixels, &image[i].width, &image[i].height,    // pixels
-                          max_texture_dim);
-        if (ret != 0) {
-            FATAL("failed to jpeg_decode file %s\n", fn);
+        ret = read_jpeg_file(filename, max_texture_dim,
+                             &image[i].pixels, &image[i].width, &image[i].height);
+        if (ret == 0) {
+            continue;
         }
 
-        INFO("read %s width=%d height=%d\n", fn, image[i].width, image[i].height);
-
-        close(fd);
+        ERROR("file %s is not in a supported jpeg or png format\n", filename);
     }
 
     // loop until done
@@ -237,16 +232,16 @@ int main(int argc, char **argv)
                           image_height + 2 * PANE_BORDER_WIDTH);
         }
 
-        // use sdl to draw the combined jpeg images
+        // use sdl to draw each of the images to its pane
         sdl_display_init();
         for (i = 0; i < rows*cols; i++) {
             sdl_render_pane_border(&pane_full[i], GREEN);
-            if (i >= max_image) {
+            if (i >= max_image || image[i].width == 0) {
                 continue;
             }
 
-            texture = sdl_create_yuy2_texture(image[i].width, image[i].height);
-            sdl_update_yuy2_texture(texture, image[i].pixels, image[i].width);
+            texture = sdl_create_texture(image[i].width, image[i].height);
+            sdl_update_texture(texture, image[i].pixels, image[i].width);
             sdl_render_texture(texture, &pane[i]);
             sdl_destroy_texture(texture);
         }
@@ -270,6 +265,7 @@ int main(int argc, char **argv)
             case 'w': {                       // write the png file
                 char filename[100];
                 sprintf(filename, "%s_%d_%d.png", filename_prefix, win_width, win_height);
+                INFO("writing %s\n", filename);
                 sdl_print_screen(filename, true);
                 redraw = true;
                 break; }
@@ -308,11 +304,11 @@ static void usage(void)
 {
     printf("\
 SYNOPSIS: \n\
-    jpeg_merge [OPTIONS] [JPEG_FILES...]\n\
+    image_merge [OPTIONS] [JPEG_OR_PNG_FILES...]\n\
 \n\
 DESCRIPTION\n\
-    This program combines jpeg files and writes the combined image to\n\
-    a png file. The jpeg files are arranged in a grid in the output file.\n\
+    This program reads jpeg and png files and combines them into a\n\
+    single png output file.\n\
 \n\
 OPTIONS\n\
     -h       : help\n\

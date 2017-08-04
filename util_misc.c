@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016 Steven Haid
+Copyright (c) 2017 Steven Haid
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -59,8 +59,8 @@ void logmsg(char *lvl, const char *func, char *fmt, ...)
         len--;
     }
 
-    // log to stdout 
-    printf("%s %s %s: %s\n",
+    // log to stderr 
+    fprintf(stderr, "%s %s %s: %s\n",
            time2str(time_str, get_real_time_us(), false, true, true),
            lvl, func, msg);
 }

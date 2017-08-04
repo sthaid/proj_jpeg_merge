@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016 Steven Haid
+Copyright (c) 2017 Steven Haid
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -41,6 +41,7 @@ SOFTWARE.
 
 #include "util_sdl.h"
 #include "util_sdl_button_sound.h"
+#include "util_png.h"
 #include "util_misc.h"
 
 //
@@ -121,9 +122,22 @@ static void sdl_exit_handler(void);
 static void play_event_sound(void);
 static void sdl_set_color(int32_t color); 
 
+// 
+// inline procedures
+//
+
+static inline uint32_t _bswap32(uint32_t a)
+{
+  a = ((a & 0x000000FF) << 24) |
+      ((a & 0x0000FF00) <<  8) |
+      ((a & 0x00FF0000) >>  8) |
+      ((a & 0xFF000000) >> 24);
+  return a;
+}
+
 // -----------------  SDL INIT & CLOSE  --------------------------------- 
 
-int32_t sdl_init(uint32_t w, uint32_t h, char * screenshot_prefix, int32_t * max_texture_dim)
+int32_t sdl_init(int32_t w, int32_t h, char * screenshot_prefix, int32_t * max_texture_dim)
 {
     #define SDL_FLAGS SDL_WINDOW_RESIZABLE
     #define MAX_FONT_SEARCH_PATH 3
@@ -240,7 +254,7 @@ int32_t sdl_init(uint32_t w, uint32_t h, char * screenshot_prefix, int32_t * max
     // - SDL provides us with max_texture_width and max_texture_height, usually the same
     // - the min of max_texture_width/height is returned to caller
     // - this returned max_texture_dim is to be used by the caller to limit the maximum
-    //   width and height args passed to sdl_create_yuy2_texture()
+    //   width and height args passed to sdl_create_texture()
     if (SDL_GetRendererInfo(sdl_renderer, &sdl_renderer_info) != 0) {
         ERROR("SDL_SDL_GetRendererInfo failed\n");
         return -1;
@@ -284,7 +298,7 @@ static void sdl_exit_handler(void)
     SDL_Quit();
 }
 
-void sdl_get_state(uint32_t * win_width, uint32_t * win_height, bool * win_minimized)
+void sdl_get_state(int32_t * win_width, int32_t * win_height, bool * win_minimized)
 {
     if (win_width) {
         *win_width = sdl_win_width;
@@ -313,7 +327,7 @@ void sdl_display_present(void)
 
 // -----------------  PANE SUPPORT ROUTINES  ---------------------------- 
 
-void sdl_init_pane(rect_t * pane_full, rect_t * pane, int16_t x, int16_t y, uint16_t w, uint16_t h)
+void sdl_init_pane(rect_t * pane_full, rect_t * pane, int16_t x, int16_t y, int16_t w, int16_t h)
 {
     pane_full->x = x;
     pane_full->y = y;
@@ -720,96 +734,42 @@ static void play_event_sound(void)
 
 void sdl_print_screen(char *file_name, bool flash_display) 
 {
-    int32_t   (*pixels)[4096] = NULL;
-    FILE       *fp = NULL;
-    SDL_Rect    rect;
-    int32_t    *row_pointers[4096];
-    png_structp png_ptr;
-    png_infop   info_ptr;
-    png_byte    color_type, bit_depth;
-    int32_t     y, ret;
+    #define BYTES_PER_PIXEL 4
 
-    //
-    // allocate and read the pixels
-    //
+    uint8_t * pixels = NULL;
+    SDL_Rect  rect;
+    int32_t   ret;
 
-    pixels = calloc(1, sdl_win_height*sizeof(pixels[0]));
+    // allocate memory for pixels
+    pixels = calloc(1, sdl_win_height*sdl_win_width*BYTES_PER_PIXEL);
     if (pixels == NULL) {
         ERROR("allocate pixels failed\n");
-        goto done;
+        return;
     }
 
+    // copy entire display to pixels
     rect.x = 0;
     rect.y = 0;
     rect.w = sdl_win_width;
     rect.h = sdl_win_height;   
-    ret = SDL_RenderReadPixels(sdl_renderer, &rect, SDL_PIXELFORMAT_ABGR8888, pixels, sizeof(pixels[0]));
+    ret = SDL_RenderReadPixels(sdl_renderer, 
+                               &rect, 
+                               SDL_PIXELFORMAT_ABGR8888, 
+                               pixels, 
+                               sdl_win_width*BYTES_PER_PIXEL);
     if (ret < 0) {
         ERROR("SDL_RenderReadPixels, %s\n", SDL_GetError());
-        goto done;
+        free(pixels);
+        return;
     }
 
-
-    //
-    // write pixels to file_name ...
-    //
-
-    // init
-    color_type = PNG_COLOR_TYPE_RGB_ALPHA;
-    bit_depth = 8;
-    for (y = 0; y < sdl_win_height; y++) {
-        row_pointers[y] = pixels[y];
+    // write pixels to file_name, png format
+    ret = write_png_file(file_name, pixels, sdl_win_width, sdl_win_height);
+    if (ret != 0) {
+        ERROR("write_png_file %s failed\n", file_name);
+        free(pixels);
+        return;
     }
-
-    // create file 
-    fp = fopen(file_name, "wb");
-    if (!fp) {
-        ERROR("fopen %s\n", file_name);
-        goto done;  
-    }
-
-    // initialize stuff 
-    png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!png_ptr) {
-        ERROR("png_create_write_struct\n");
-        goto done;  
-    }
-
-    info_ptr = png_create_info_struct(png_ptr);
-    if (!info_ptr) {
-        ERROR("png_create_info_struct\n");
-        goto done;  
-    }
-
-    if (setjmp(png_jmpbuf(png_ptr))) {
-        ERROR("init_io failed\n");
-        goto done;  
-    }
-    png_init_io(png_ptr, fp);
-
-    // write header 
-    if (setjmp(png_jmpbuf(png_ptr))) {
-        ERROR("writing header\n");
-        goto done;  
-    }
-    png_set_IHDR(png_ptr, info_ptr, sdl_win_width, sdl_win_height,
-                 bit_depth, color_type, PNG_INTERLACE_NONE,
-                 PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
-    png_write_info(png_ptr, info_ptr);
-
-    // write bytes 
-    if (setjmp(png_jmpbuf(png_ptr))) {
-        ERROR("writing bytes\n");
-        goto done;  
-    }
-    png_write_image(png_ptr, (void*)row_pointers);
-
-    // end write 
-    if (setjmp(png_jmpbuf(png_ptr))) {
-        ERROR("end of write\n");
-        goto done;  
-    }
-    png_write_end(png_ptr, NULL);
 
     // it worked, flash display if enabled;
     // the caller must redraw the screen if flash_display is enabled
@@ -825,13 +785,7 @@ void sdl_print_screen(char *file_name, bool flash_display)
         usleep(250000);
     }
 
-done:
-    //
-    // clean up and return
-    //
-    if (fp != NULL) {
-        fclose(fp);
-    }
+    // free allocated memory
     free(pixels);
 }
 
@@ -1009,12 +963,12 @@ static void sdl_set_color(int32_t color)
 
 // -----------------  RENDER USING TEXTURES  ---------------------------- 
 
-texture_t sdl_create_yuy2_texture(int32_t w, int32_t h)
+texture_t sdl_create_texture(int32_t w, int32_t h)
 {
     SDL_Texture * texture;
 
     texture = SDL_CreateTexture(sdl_renderer,
-                                SDL_PIXELFORMAT_YUY2,
+                                SDL_PIXELFORMAT_ABGR8888,
                                 SDL_TEXTUREACCESS_STREAMING,
                                 w, h);
     if (texture == NULL) {
@@ -1033,7 +987,7 @@ texture_t sdl_create_filled_circle_texture(int32_t radius, int32_t color)
     int32_t radiusError = 1-x;
     int32_t pixels[width][width];
     SDL_Texture * texture;
-    uint32_t rgba = sdl_color_to_rgba[color];
+    uint32_t rgba = _bswap32(sdl_color_to_rgba[color]);
 
     #define DRAWLINE(Y, XS, XE, V) \
         do { \
@@ -1061,7 +1015,7 @@ texture_t sdl_create_filled_circle_texture(int32_t radius, int32_t color)
 
     // create the texture and copy the pixels to the texture
     texture = SDL_CreateTexture(sdl_renderer,
-                                SDL_PIXELFORMAT_RGBA8888,
+                                SDL_PIXELFORMAT_ABGR8888,
                                 SDL_TEXTUREACCESS_STATIC,
                                 width, width);
     if (texture == NULL) {
@@ -1116,7 +1070,7 @@ texture_t sdl_create_text_texture(int32_t fg_color, int32_t bg_color, int32_t fo
     return (texture_t)texture;
 }
 
-void sdl_update_yuy2_texture(texture_t texture, uint8_t * pixels, int32_t pitch) 
+void sdl_update_texture(texture_t texture, uint8_t * pixels, int32_t pitch) 
 {
     int32_t width, height;
 
@@ -1125,7 +1079,7 @@ void sdl_update_yuy2_texture(texture_t texture, uint8_t * pixels, int32_t pitch)
     SDL_UpdateTexture((SDL_Texture*)texture,
                       NULL,            // update entire texture
                       pixels,          // pixels
-                      pitch*2);        // pitch
+                      pitch*4);        // pitch
 }
 
 void sdl_query_texture(texture_t texture, int32_t * width, int32_t * height)

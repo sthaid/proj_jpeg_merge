@@ -1,15 +1,15 @@
 # OVERVIEW
 
-This program combines multiple jpeg files into a single png file.
+This program combines multiple jpeg and png files into a single png file.
 
 Sample out.png is included.
 
 This program does the following:
-- reads the jpeg files using libjpeg-turbo
-- displays the jpegs files using SDL2
-- creates a screenshot of the display using libpng
+- reads the jpeg and png files 
+- displays each of the images
+- read the display pixels and create output png file
 
-# FUTURE ENHANCEMENTS
+# POSSIBLE FUTURE ENHANCEMENTS
 
 Provide greater flexibility in the layout.
 

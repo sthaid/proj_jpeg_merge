@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016 Steven Haid
+Copyright (c) 2017 Steven Haid
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -119,7 +119,7 @@ typedef void * texture_t;
 
 typedef struct {
     int16_t x, y;
-    uint16_t w, h;
+    int16_t w, h;
 } rect_t;
 
 typedef struct {
@@ -131,15 +131,15 @@ typedef struct {
 //
 
 // window initialize, and get_state
-int32_t sdl_init(uint32_t w, uint32_t h, char * screenshot_prefix, int32_t * max_texture_dim);
-void sdl_get_state(uint32_t * win_width, uint32_t * win_height, bool * win_minimized);
+int32_t sdl_init(int32_t w, int32_t h, char * screenshot_prefix, int32_t * max_texture_dim);
+void sdl_get_state(int32_t * win_width, int32_t * win_height, bool * win_minimized);
 
 // display init and present
 void sdl_display_init(void);
 void sdl_display_present(void);
 
 // pane support
-void sdl_init_pane(rect_t * pane, rect_t * rect, int16_t x, int16_t y, uint16_t w, uint16_t h);
+void sdl_init_pane(rect_t * pane, rect_t * rect, int16_t x, int16_t y, int16_t w, int16_t h);
 int32_t sdl_pane_cols(rect_t * rect, int32_t fid);
 int32_t sdl_pane_rows(rect_t * rect, int32_t fid);
 void sdl_render_pane_border(rect_t * pane_full, int32_t color);
@@ -165,10 +165,10 @@ void sdl_render_line(rect_t * pane, int32_t x1, int32_t y1, int32_t x2, int32_t 
 void sdl_render_lines(rect_t * pane, point_t * points, int32_t count, int32_t color);
 
 // render using textures
-texture_t sdl_create_yuy2_texture(int32_t w, int32_t h);
+texture_t sdl_create_texture(int32_t w, int32_t h);
 texture_t sdl_create_filled_circle_texture(int32_t radius, int32_t color);
 texture_t sdl_create_text_texture(int32_t fg_color, int32_t bg_color, int32_t font_id, char * str);
-void sdl_update_yuy2_texture(texture_t texture, uint8_t * pixels, int32_t pitch);
+void sdl_update_texture(texture_t texture, uint8_t * pixels, int32_t pitch);
 void sdl_query_texture(texture_t texture, int32_t * width, int32_t * height);
 void sdl_render_texture(texture_t texture, rect_t * dstrect);
 void sdl_destroy_texture(texture_t texture);
