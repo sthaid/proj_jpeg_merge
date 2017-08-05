@@ -74,6 +74,7 @@ SOFTWARE.
 
 #define MAX_IMAGE 1000
 #define MAX_COLS  10
+#define MAX_BORDER_COLOR_TBL (sizeof(border_color_tbl) / sizeof(border_color_tbl[0]))
 
 //
 // typedefs
@@ -85,6 +86,11 @@ typedef struct {
     int32_t   height;
 } image_t;
 
+typedef struct {
+    char * name;
+    int32_t color;
+} border_color_t;
+
 // 
 // variables
 //
@@ -92,11 +98,25 @@ typedef struct {
 int32_t  image_width  = 320;
 int32_t  image_height = 240;
 char     filename_prefix[100] = "out";
+int32_t  border_color = GREEN;
 int32_t  cols, rows;
 int32_t  win_width, win_height;
 image_t  image[MAX_IMAGE];
 int32_t  max_image;
 int32_t  max_texture_dim;
+
+border_color_t border_color_tbl[] = {
+    { "PURPLE",     PURPLE     },
+    { "BLUE",       BLUE       },
+    { "LIGHT_BLUE", LIGHT_BLUE },
+    { "GREEN",      GREEN      },
+    { "YELLOW",     YELLOW     },
+    { "ORANGE",     ORANGE     },
+    { "PINK",       PINK       },
+    { "RED",        RED        },
+    { "GRAY",       GRAY       },
+    { "WHITE",      WHITE      },
+    { "BLACK",      BLACK      },  };
 
 // 
 // prototypes
@@ -112,7 +132,7 @@ int main(int argc, char **argv)
 
     // get options
     while (true) {
-        char opt_char = getopt(argc, argv, "g:c:f:h");
+        char opt_char = getopt(argc, argv, "g:c:f:b:h");
         if (opt_char == -1) {
             break;
         }
@@ -131,6 +151,17 @@ int main(int argc, char **argv)
             break;
         case 'f':
             strcpy(filename_prefix, optarg);
+            break;
+        case 'b':
+            for (i = 0; i < MAX_BORDER_COLOR_TBL; i++) {
+                if (strcasecmp(border_color_tbl[i].name, optarg) == 0) {
+                    border_color = border_color_tbl[i].color;
+                    break;
+                }
+            }
+            if (i == MAX_BORDER_COLOR_TBL) {
+                FATAL("invalid '-b %s'\n", optarg);
+            }
             break;
         case 'h':
             usage();
@@ -235,7 +266,7 @@ int main(int argc, char **argv)
         // use sdl to draw each of the images to its pane
         sdl_display_init();
         for (i = 0; i < rows*cols; i++) {
-            sdl_render_pane_border(&pane_full[i], GREEN);
+            sdl_render_pane_border(&pane_full[i], border_color);
             if (i >= max_image || image[i].width == 0) {
                 continue;
             }

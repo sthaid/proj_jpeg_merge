@@ -677,7 +677,6 @@ sdl_event_t * sdl_poll_event(void)
 
             if ((key == SDLK_RSHIFT || key == SDLK_LSHIFT) && !shift) {
                 event.event = SDL_EVENT_KEY_UNSHIFT;
-                play_event_sound();
             }
             break; }
 
