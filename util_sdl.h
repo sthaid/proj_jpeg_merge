@@ -180,6 +180,6 @@ void sdl_display_choose_from_list(char * title_str, char ** choices, int32_t max
 void sdl_display_error(char * err_str0, char * err_str1, char * err_str2);
 
 // print screen
-void sdl_print_screen(char * file_name, bool flash_display);
+void sdl_print_screen(char * file_name, bool flash_display, rect_t * rect);
 
 #endif

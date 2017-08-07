@@ -29,11 +29,16 @@ SOFTWARE.
 //     single png output file.
 // 
 // OPTIONS
-//     -g WxH    : initial width/height of each image, default 320x240
-//     -f NAME   : output filename prefix, default 'out'
-//     -b COLOR  : select border color
-//     -l LAYOUT : 1 = equal size; 2 = first image double size
+//     -i WxH    : initial width/height of each image, default 320x240
+//     -o WxH    : initial width/height of output image, no default
+//     -c NUM    : initial number of columns, default is
+//                 based on number of images and layout
+//     -f NAME   : output filename (without extension), default 'out'
+//     -l LAYOUT : 1 = equal size; 2 = first image double size, default 1
+//     -b COLOR  : select border color, default GREEN
 //     -h        : help
+//
+//     -i and -o can not be combined
 // 
 // RUN TIME CONTROLS
 //     Keyboard Controls:
@@ -55,6 +60,7 @@ SOFTWARE.
 #include <stdbool.h>
 #include <stdarg.h>
 #include <string.h>
+#include <limits.h>
 #include <errno.h>
 #include <unistd.h>
 #include <math.h>
@@ -71,11 +77,13 @@ SOFTWARE.
 //
 
 #define MAX_IMAGE 1000
-#define MAX_COLS  10
 #define MAX_BORDER_COLOR_TBL (sizeof(border_color_tbl) / sizeof(border_color_tbl[0]))
 
 #define LAYOUT_EQUAL_SIZE              1
 #define LAYOUT_FIRST_IMAGE_DOUBLE_SIZE 2
+
+#define DEFAULT_IMAGE_WIDTH  320
+#define DEFAULT_IMAGE_HEIGHT 240
 
 //
 // typedefs
@@ -103,29 +111,28 @@ static int32_t layout = LAYOUT_EQUAL_SIZE;
 //
 
 static void usage(void);
-static void get_combined_image_initial_cols(
-    int32_t max_image,   // in
-    int32_t * cols);     // out
-static void get_combined_image_rows(
-    int32_t max_image, int32_t cols,  // in
-    int32_t * rows);                  // out
-static void get_combined_image_panes(
-    int32_t rows, int32_t cols, int32_t win_width, int32_t win_height, int32_t image_width, int32_t image_height, // in
-    rect_t * pane, rect_t * pane_full, int32_t * max_pane);                                                       // out
-static void get_combined_image_min_cols(
-    int32_t * min_cols);  // out
+static void layout_init(
+    int32_t max_image, int32_t image_width, int32_t image_height,     // in
+    int32_t * win_width, int32_t * win_height, int32_t * cols,        // in out
+    int32_t * min_cols, int32_t * max_cols);                          // out
+static void layout_get_panes(
+    int32_t max_image, int32_t win_width, int32_t win_height, int32_t cols,    // in
+    rect_t * pane, rect_t * pane_full, int32_t * max_pane,                     // out
+    int32_t * win_width_used, int32_t * win_height_used);
 
 // -----------------  MAIN  ---------------------------------------------------------------------
 
 int main(int argc, char **argv)
 {
-    char     filename_prefix[100];
-    int32_t  win_width, win_height, image_width, image_height, rows, cols;
-    rect_t   pane[MAX_IMAGE], pane_full[MAX_IMAGE];
-    int32_t  max_pane;
-    int32_t  i, border_color, max_texture_dim;
-    image_t  image[MAX_IMAGE];
-    int32_t  max_image;
+    static int32_t  win_width, win_height, image_width, image_height, cols, min_cols, max_cols;
+    static rect_t   pane[MAX_IMAGE], pane_full[MAX_IMAGE];
+    static int32_t  max_pane;
+    static image_t  image[MAX_IMAGE];
+    static int32_t  max_image;
+    static char     filename_out[PATH_MAX];
+    static int32_t  border_color;
+    static int32_t  max_texture_dim;
+    static int32_t  i;
 
     static const border_color_t border_color_tbl[] = {
         { "PURPLE",     PURPLE     },
@@ -144,33 +151,46 @@ int main(int argc, char **argv)
     // initialization
     //
 
-    // initialize
-    strcpy(filename_prefix, "out");
-    image_width  = 320;
-    image_height = 240;
+    // initialize non zero variables
+    strcpy(filename_out, "out");
     border_color = GREEN;
-
-    bzero(pane, sizeof(pane));
-    bzero(pane_full, sizeof(pane_full));
-    max_pane = 0;
-
-    bzero(image, sizeof(image));
-    max_image = 0;
 
     // get options
     while (true) {
-        char opt_char = getopt(argc, argv, "g:f:b:l:h");
+        char opt_char = getopt(argc, argv, "i:o:c:f:l:b:h");
         if (opt_char == -1) {
             break;
         }
         switch (opt_char) {
-        case 'g':
-            if (sscanf(optarg, "%dx%d", &image_width, &image_height) != 2) {
-                FATAL("invalid '-g %s'\n", optarg);
+        case 'i':
+            if (sscanf(optarg, "%dx%d", &image_width, &image_height) != 2 ||
+                image_width <= 0 || image_height <= 0) 
+            {
+                FATAL("invalid '-i %s'\n", optarg);
+            }
+            break;
+        case 'o':
+            if (sscanf(optarg, "%dx%d", &win_width, &win_height) != 2 ||
+                win_width <= 0 || win_height <= 0) 
+            {
+                FATAL("invalid '-o %s'\n", optarg);
+            }
+            break;
+        case 'c': 
+            if (sscanf(optarg, "%d", &cols) != 1 || cols <= 0) {
+                FATAL("invalid '-c %s'\n", optarg);
             }
             break;
         case 'f':
-            strcpy(filename_prefix, optarg);
+            strcpy(filename_out, optarg);
+            break;
+        case 'l':
+            if ((sscanf(optarg, "%d", &layout) != 1) ||
+                (layout != LAYOUT_EQUAL_SIZE && 
+                 layout != LAYOUT_FIRST_IMAGE_DOUBLE_SIZE))
+            {
+                FATAL("invalid '-l %s'\n", optarg);
+            }
             break;
         case 'b':
             for (i = 0; i < MAX_BORDER_COLOR_TBL; i++) {
@@ -183,13 +203,6 @@ int main(int argc, char **argv)
                 FATAL("invalid '-b %s'\n", optarg);
             }
             break;
-        case 'l':
-            if (sscanf(optarg, "%d", &layout) != 1 ||
-                layout < 1 || layout > 2) 
-            {
-                FATAL("invalid '-l %s'\n", optarg);
-            }
-            break;
         case 'h':
             usage();
             exit(0);
@@ -198,21 +211,23 @@ int main(int argc, char **argv)
         }
     }
 
-    // determine number of image filenames supplies, and 
-    // verify at least one has been supplied
+    // if both image and window dims supplied then error
+    if (win_width != 0 && image_width != 0) {
+        FATAL("-o and -i options can not be combined\n");
+    }
+
+    // determine max_image, and 
+    // verify at leat 1 image supplied
     max_image = argc - optind;
     if (max_image == 0) {
         usage();
         exit(1);
     }
 
-    // determine initial:
-    // - cols, rows,
-    // - wind_width, win_height
-    get_combined_image_initial_cols(max_image, &cols);
-    get_combined_image_rows(max_image, cols, &rows);
-    win_width = (image_width + PANE_BORDER_WIDTH) * cols + PANE_BORDER_WIDTH;
-    win_height = (image_height + PANE_BORDER_WIDTH) * rows + PANE_BORDER_WIDTH;
+    // layout init
+    layout_init(max_image, image_width, image_height,  // in
+                &win_width, &win_height, &cols,        // in out
+                &min_cols, &max_cols);                 // out
 
     // sdl init
     if (sdl_init(win_width, win_height, NULL, &max_texture_dim) < 0) {
@@ -247,15 +262,17 @@ int main(int argc, char **argv)
 
     // loop until done
     while (true) {
+        sdl_event_t * event;
+        bool          redraw=false, done=false;
+        int32_t       win_width_used, win_height_used;
+
         // get current window size
         sdl_get_state(&win_width, &win_height, NULL);
 
-        // determine combines image layout values
-        get_combined_image_rows(max_image, cols, &rows);
-        image_width = (win_width - PANE_BORDER_WIDTH) / cols - PANE_BORDER_WIDTH;
-        image_height = (win_height - PANE_BORDER_WIDTH) / rows - PANE_BORDER_WIDTH;
-        get_combined_image_panes(rows, cols, win_width, win_height, image_width, image_height,  // in
-                                 pane, pane_full, &max_pane);                                   // out
+        // layout get panes
+        layout_get_panes(max_image, win_width, win_height, cols,   // in
+                         pane, pane_full, &max_pane,               // out
+                         &win_width_used, &win_height_used);
 
         // sanity check: error if max_pane < max_image
         if (max_pane < max_image) {
@@ -275,39 +292,33 @@ int main(int argc, char **argv)
         }
         sdl_display_present();
 
-        // process sdl events, 
-        // stay in this loop until either a display redraw is needed or program terminate
-        sdl_event_t * event;
-        bool redraw, done;
-
+        // process sdl events
         sdl_event_register('w', SDL_EVENT_TYPE_KEY, NULL);   // write png file
         sdl_event_register('q', SDL_EVENT_TYPE_KEY, NULL);   // quit program
         sdl_event_register('-', SDL_EVENT_TYPE_KEY, NULL);   // decrease cols
         sdl_event_register('+', SDL_EVENT_TYPE_KEY, NULL);   // increase cols
         sdl_event_register('=', SDL_EVENT_TYPE_KEY, NULL);   // increase cols
-        redraw = false;
-        done = false;
         while (true) {
+            // get and process the event
             event = sdl_poll_event();
             switch (event->event) {
             case SDL_EVENT_QUIT: case 'q':    // quit
                 done = true;
                 break;
             case 'w': {                       // write the png file
-                char filename[100];
-                sprintf(filename, "%s_%d_%d.png", filename_prefix, win_width, win_height);
-                INFO("writing %s\n", filename);
-                sdl_print_screen(filename, true);
+                char filename[PATH_MAX];
+                rect_t rect = {0, 0, win_width_used, win_height_used};
+                sprintf(filename, "%s.png", filename_out);
+                INFO("writing %s, width=%d height=%d\n", filename_out, win_width_used, win_height_used); 
+                sdl_print_screen(filename, true, &rect);
                 redraw = true;
                 break; }
             case '-': case '+': case '=': {   // chagne cols
-                int32_t min_cols;
-                get_combined_image_min_cols(&min_cols);
                 cols += (event->event == '-' ? -1 : 1);
                 if (cols < min_cols) {
                     cols = min_cols;
-                } else if (cols > MAX_COLS) {
-                    cols = MAX_COLS;
+                } else if (cols > max_cols) {
+                    cols = max_cols;
                 }
                 redraw = true;
                 break; }
@@ -320,10 +331,13 @@ int main(int argc, char **argv)
                 break;
             }
 
+            // if time to terminate program or redraw display then 
+            // exit the 'while (true)' loop
             if (done || redraw) {
                 break;
             }
 
+            // delay 1 ms
             usleep(1000);
         }
 
@@ -347,11 +361,16 @@ DESCRIPTION\n\
     single png output file.\n\
 \n\
 OPTIONS\n\
-    -g WxH    : initial width/height of each image, default 320x240\n\
-    -f NAME   : output filename prefix, default 'out'\n\
-    -b COLOR  : select border color\n\
-    -l LAYOUT : 1 = equal size; 2 = first image double size\n\
+    -i WxH    : initial width/height of each image, default 320x240\n\
+    -o WxH    : initial width/height of output image, no default\n\
+    -c NUM    : initial number of columns, default is\n\
+                based on number of images and layout\n\
+    -f NAME   : output filename (without extension), default 'out'\n\
+    -l LAYOUT : 1 = equal size; 2 = first image double size, default 1\n\
+    -b COLOR  : select border color, default GREEN\n\
     -h        : help\n\
+\n\
+    -i and -o can not be combined\n\
 \n\
 RUN TIME CONTROLS\n\
     Keyboard Controls:\n\
@@ -363,50 +382,105 @@ RUN TIME CONTROLS\n\
 ");
 }
 
-// -----------------  SUPPORT MULTIPLE COMBINED IMAGE LAYOUTS  ----------------------------
+// -----------------  MULTIPLE LAYOUT SUPPORT  --------------------------------------------
 
-static void get_combined_image_initial_cols(
-    int32_t max_image,   // in
-    int32_t * cols)      // out
+static void layout_init(
+    int32_t max_image, int32_t image_width, int32_t image_height,     // in
+    int32_t * win_width, int32_t * win_height, int32_t * cols,        // in out
+    int32_t * min_cols, int32_t * max_cols)                           // out
 {
+    int32_t rows;
+
+    // determine valid cols range
     if (layout == LAYOUT_EQUAL_SIZE) {
-        *cols = (max_image == 1 ? 1 :
-                 max_image == 2 ? 2 :
-                 max_image == 3 ? 3 :
-                 max_image == 4 ? 2 
-                                : 3);
+        *min_cols = 1;
+        *max_cols = 10;
     } else if (layout == LAYOUT_FIRST_IMAGE_DOUBLE_SIZE) {
-        *cols = (max_image == 1 ? 2  
-                                : 3);
+        *min_cols = 2;
+        *max_cols = 10;
     } else {
         FATAL("layout %d not supported\n", layout);
     }
-}
 
-static void get_combined_image_rows(
-    int32_t max_image, int32_t cols,  // in
-    int32_t * rows)                   // out
-{
-    if (layout == LAYOUT_EQUAL_SIZE) {
-        *rows = ceil((double)max_image / cols);
-    } else if (layout == LAYOUT_FIRST_IMAGE_DOUBLE_SIZE) {
-        int32_t images_in_first_2_rows = 1 + 2 * (cols - 2);
-        if (images_in_first_2_rows >= max_image) {
-            *rows = 2;
-        } else {
-            *rows = 2 + ceil((double)(max_image - images_in_first_2_rows) / cols);
+    // determine cols ...
+    // if cols arg supplied then
+    //    verify supplied cols is in range
+    // else
+    //    get_out_image_recommended_cols
+    // endif
+    if (*cols > 0) {
+        if (*cols < *min_cols || *cols > *max_cols) {
+            FATAL("cols %d not in ragne %d - %d\n", *cols, *min_cols, *max_cols);
         }
     } else {
-        FATAL("layout %d not supported\n", layout);
+        if (layout == LAYOUT_EQUAL_SIZE) {
+            *cols = (max_image == 1 ? 1 :
+                     max_image == 2 ? 2 :
+                     max_image == 3 ? 3 :
+                     max_image == 4 ? 2 
+                                    : 3);
+        } else { // LAYOUT_FIRST_IMAGE_DOUBLE_SIZE
+            *cols = (max_image == 1 ? 2  
+                                    : 3);
+        }
+    }
+
+    // determine rows;  rows is just used local to this routine
+    if (layout == LAYOUT_EQUAL_SIZE) {
+        rows = ceil((double)max_image / (*cols));
+    } else { // LAYOUT_FIRST_IMAGE_DOUBLE_SIZE
+        int32_t images_in_first_2_rows = 1 + 2 * ((*cols) - 2);
+        if (images_in_first_2_rows >= max_image) {
+            rows = 2;
+        } else {
+            rows = 2 + ceil((double)(max_image - images_in_first_2_rows) / (*cols));
+        }
+    }
+
+    // determine win_width, win_height ...
+    // if win dims not supplied
+    //    if image dims not supplied
+    //        use default image dims
+    //    endif
+    //    determine win dimensions from image dimensions
+    // endif
+    if (*win_width == 0) {
+        if (image_width == 0) {
+            image_width  = DEFAULT_IMAGE_WIDTH;
+            image_height = DEFAULT_IMAGE_HEIGHT;
+        }
+        *win_width = (image_width + PANE_BORDER_WIDTH) * (*cols) + PANE_BORDER_WIDTH;
+        *win_height = (image_height + PANE_BORDER_WIDTH) * rows + PANE_BORDER_WIDTH;
     }
 }
 
-static void get_combined_image_panes(
-    int32_t rows, int32_t cols, int32_t win_width, int32_t win_height, int32_t image_width, int32_t image_height,  // inputs
-    rect_t * pane, rect_t * pane_full, int32_t * max_pane)          // outputs
+static void layout_get_panes(
+    int32_t max_image, int32_t win_width, int32_t win_height, int32_t cols,    // in
+    rect_t * pane, rect_t * pane_full, int32_t * max_pane,                     // out
+    int32_t * win_width_used, int32_t * win_height_used)
 {
-    int32_t r, c;
+    int32_t r, c; 
+    int32_t rows;
+    int32_t image_width, image_height;
 
+    // determine rows;  rows is just used local to this routine
+    if (layout == LAYOUT_EQUAL_SIZE) {
+        rows = ceil((double)max_image / cols);
+    } else { // LAYOUT_FIRST_IMAGE_DOUBLE_SIZE
+        int32_t images_in_first_2_rows = 1 + 2 * (cols - 2);
+        if (images_in_first_2_rows >= max_image) {
+            rows = 2;
+        } else {
+            rows = 2 + ceil((double)(max_image - images_in_first_2_rows) / cols);
+        }
+    }
+
+    // determine image_width and image_height;
+    // these are also just used local to this routine
+    image_width = (win_width - PANE_BORDER_WIDTH) / cols - PANE_BORDER_WIDTH;
+    image_height = (win_height - PANE_BORDER_WIDTH) / rows - PANE_BORDER_WIDTH;
+
+    // determine pane, pane_full, and max_pane
     if (layout == LAYOUT_EQUAL_SIZE) {
         *max_pane = 0;
         for (r = 0; r < rows; r++) {
@@ -419,7 +493,7 @@ static void get_combined_image_panes(
                 (*max_pane)++;
             }
         }
-    } else if (layout == LAYOUT_FIRST_IMAGE_DOUBLE_SIZE) {
+    } else { // LAYOUT_FIRST_IMAGE_DOUBLE_SIZE
         *max_pane = 0;
 
         // first pane is double size
@@ -443,19 +517,11 @@ static void get_combined_image_panes(
                 (*max_pane)++;
             }
         }
-    } else {
-        FATAL("layout %d not supported\n", layout);
     }
+
+    // determine win_width_used and win_height_used, these
+    // may be slightly less than win_width/height
+    *win_width_used = (image_width + PANE_BORDER_WIDTH) * cols + PANE_BORDER_WIDTH;
+    *win_height_used = (image_height + PANE_BORDER_WIDTH) * rows + PANE_BORDER_WIDTH;
 }
 
-static void get_combined_image_min_cols(
-    int32_t * min_cols)   // out
-{
-    if (layout == LAYOUT_EQUAL_SIZE) {
-        *min_cols = 1;
-    } else if (layout == LAYOUT_FIRST_IMAGE_DOUBLE_SIZE) {
-        *min_cols = 2;
-    } else {
-        FATAL("layout %d not supported\n", layout);
-    }
-}

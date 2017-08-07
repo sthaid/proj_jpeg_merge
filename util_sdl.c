@@ -607,7 +607,7 @@ sdl_event_t * sdl_poll_event(void)
                         tm.tm_year-100, tm.tm_mon+1, tm.tm_mday,
                         tm.tm_hour, tm.tm_min, tm.tm_sec);
                 play_event_sound();
-                sdl_print_screen(filename,true);
+                sdl_print_screen(filename,true,NULL);
                 event.event = SDL_EVENT_SCREENSHOT_TAKEN;
                 break;
             }
@@ -731,7 +731,7 @@ static void play_event_sound(void)
 
 // -----------------  PRINT SCREEN -------------------------------------- 
 
-void sdl_print_screen(char *file_name, bool flash_display) 
+void sdl_print_screen(char *file_name, bool flash_display, rect_t * rect_arg) 
 {
     #define BYTES_PER_PIXEL 4
 
@@ -746,16 +746,29 @@ void sdl_print_screen(char *file_name, bool flash_display)
         return;
     }
 
+    // if caller has supplied region to print then 
+    //   init rect to print with caller supplied position
+    // else
+    //   init rect to print with entire window
+    // endif
+    if (rect_arg) {
+        rect.x = rect_arg->x;
+        rect.y = rect_arg->y;
+        rect.w = rect_arg->w;
+        rect.h = rect_arg->h;
+    } else {
+        rect.x = 0;
+        rect.y = 0;
+        rect.w = sdl_win_width;
+        rect.h = sdl_win_height;   
+    }
+
     // copy entire display to pixels
-    rect.x = 0;
-    rect.y = 0;
-    rect.w = sdl_win_width;
-    rect.h = sdl_win_height;   
     ret = SDL_RenderReadPixels(sdl_renderer, 
                                &rect, 
                                SDL_PIXELFORMAT_ABGR8888, 
                                pixels, 
-                               sdl_win_width*BYTES_PER_PIXEL);
+                               rect.w * BYTES_PER_PIXEL);
     if (ret < 0) {
         ERROR("SDL_RenderReadPixels, %s\n", SDL_GetError());
         free(pixels);
@@ -763,7 +776,7 @@ void sdl_print_screen(char *file_name, bool flash_display)
     }
 
     // write pixels to file_name, png format
-    ret = write_png_file(file_name, pixels, sdl_win_width, sdl_win_height);
+    ret = write_png_file(file_name, pixels, rect.w, rect.h);
     if (ret != 0) {
         ERROR("write_png_file %s failed\n", file_name);
         free(pixels);
@@ -776,8 +789,8 @@ void sdl_print_screen(char *file_name, bool flash_display)
         rect_t screen_pane, dummy_pane;
         rect_t rect = {0,0,sdl_win_width,sdl_win_height};
         sdl_init_pane(&screen_pane, &dummy_pane,
-                    0, 0,
-                    sdl_win_width, sdl_win_height);
+                      0, 0,
+                      sdl_win_width, sdl_win_height);
         sdl_display_init();
         sdl_render_fill_rect(&screen_pane, &rect, WHITE);
         sdl_display_present();
