@@ -30,12 +30,15 @@ SOFTWARE.
 // 
 // OPTIONS
 //     -i WxH    : initial width/height of each image, default 320x240
-//     -o WxH    : initial width/height of output image, no default
+//     -o WxH    : initial width/height of output image
+//     -o W      : initial width of ouput image, ouput image height will
+//                 be set appropriately
 //     -c NUM    : initial number of columns, default is
 //                 based on number of images and layout
 //     -f NAME   : output filename (without extension), default 'out'
 //     -l LAYOUT : 1 = equal size; 2 = first image double size, default 1
 //     -b COLOR  : select border color, default GREEN
+//     -z        : enable batch mode
 //     -h        : help
 //
 //     -i and -o can not be combined
@@ -131,6 +134,7 @@ int main(int argc, char **argv)
     static int32_t  max_image;
     static char     filename_out[PATH_MAX];
     static int32_t  border_color;
+    static bool     batch_mode;
     static int32_t  max_texture_dim;
     static int32_t  i;
 
@@ -157,7 +161,7 @@ int main(int argc, char **argv)
 
     // get options
     while (true) {
-        char opt_char = getopt(argc, argv, "i:o:c:f:l:b:h");
+        char opt_char = getopt(argc, argv, "i:o:c:f:l:b:zh");
         if (opt_char == -1) {
             break;
         }
@@ -170,9 +174,15 @@ int main(int argc, char **argv)
             }
             break;
         case 'o':
-            if (sscanf(optarg, "%dx%d", &win_width, &win_height) != 2 ||
-                win_width <= 0 || win_height <= 0) 
-            {
+            if (sscanf(optarg, "%dx%d", &win_width, &win_height) == 2) {
+                if (win_width <= 0 || win_height <= 0) {
+                    FATAL("invalid '-o %s'\n", optarg);
+                }
+            } else if (sscanf(optarg, "%d", &win_width) == 1) {
+                if (win_width <= 0) {
+                    FATAL("invalid '-o %s'\n", optarg);
+                }
+            } else {
                 FATAL("invalid '-o %s'\n", optarg);
             }
             break;
@@ -203,10 +213,14 @@ int main(int argc, char **argv)
                 FATAL("invalid '-b %s'\n", optarg);
             }
             break;
+        case 'z':
+            batch_mode = true;
+            break;
         case 'h':
             usage();
             exit(0);
         default:
+            exit(1);
             break;
         }
     }
@@ -292,6 +306,24 @@ int main(int argc, char **argv)
         }
         sdl_display_present();
 
+        // if batch mode then 
+        //    sleep for 2 secs, 
+        //    write the png file,
+        //    exit pgm
+        // endif
+        if (batch_mode) {
+            char filename[PATH_MAX];
+            // sleep for 2 secs
+            sleep(2);
+            // write png file
+            rect_t rect = {0, 0, win_width_used, win_height_used};
+            sprintf(filename, "%s.png", filename_out);
+            INFO("writing %s, width=%d height=%d\n", filename_out, win_width_used, win_height_used); 
+            sdl_print_screen(filename, false, &rect);
+            // exit pgm
+            exit(1);
+        }
+
         // process sdl events
         sdl_event_register('w', SDL_EVENT_TYPE_KEY, NULL);   // write png file
         sdl_event_register('q', SDL_EVENT_TYPE_KEY, NULL);   // quit program
@@ -362,12 +394,15 @@ DESCRIPTION\n\
 \n\
 OPTIONS\n\
     -i WxH    : initial width/height of each image, default 320x240\n\
-    -o WxH    : initial width/height of output image, no default\n\
+    -o WxH    : initial width/height of output image\n\
+    -o W      : initial width of ouput image, ouput image height will\n\
+                be set appropriately\n\
     -c NUM    : initial number of columns, default is\n\
                 based on number of images and layout\n\
     -f NAME   : output filename (without extension), default 'out'\n\
     -l LAYOUT : 1 = equal size; 2 = first image double size, default 1\n\
     -b COLOR  : select border color, default GREEN\n\
+    -z        : enable batch mode\n\
     -h        : help\n\
 \n\
     -i and -o can not be combined\n\
@@ -406,7 +441,7 @@ static void layout_init(
     // if cols arg supplied then
     //    verify supplied cols is in range
     // else
-    //    get_out_image_recommended_cols
+    //    determine a recomended value for cols
     // endif
     if (*cols > 0) {
         if (*cols < *min_cols || *cols > *max_cols) {
@@ -438,19 +473,23 @@ static void layout_init(
     }
 
     // determine win_width, win_height ...
-    // if win dims not supplied
+    // if both win_width and win_height are not supplied
     //    if image dims not supplied
     //        use default image dims
     //    endif
     //    determine win dimensions from image dimensions
+    // else if win_width is supplied and win_height is not supplied
+    //    determine win_height based on win_width, rows, cols and constant scale factor
     // endif
-    if (*win_width == 0) {
+    if (*win_width == 0 && *win_height == 0) {
         if (image_width == 0) {
             image_width  = DEFAULT_IMAGE_WIDTH;
             image_height = DEFAULT_IMAGE_HEIGHT;
         }
         *win_width = (image_width + PANE_BORDER_WIDTH) * (*cols) + PANE_BORDER_WIDTH;
         *win_height = (image_height + PANE_BORDER_WIDTH) * rows + PANE_BORDER_WIDTH;
+    } else if (*win_width != 0 && *win_height == 0) {
+        *win_height = (double)(*win_width) * 0.75 * rows / (*cols);
     }
 }
 
