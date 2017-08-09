@@ -782,13 +782,17 @@ void sdl_print_screen(char *file_name, bool flash_display, rect_t * rect_arg)
     len = strlen(file_name);
     if (len > 4 && strcmp(file_name+len-4, ".jpg") == 0) {
         ret = write_jpeg_file(file_name, pixels, rect.w, rect.h);
-        ERROR("write_jpeg_file %s failed\n", file_name);
+        if (ret != 0) {
+            ERROR("write_jpeg_file %s failed\n", file_name);
+        }
     } else if (len > 4 && strcmp(file_name+len-4, ".png") == 0) {
         ret = write_png_file(file_name, pixels, rect.w, rect.h);
-        ERROR("write_png_file %s failed\n", file_name);
+        if (ret != 0) {
+            ERROR("write_png_file %s failed\n", file_name);
+        }
     } else {
-        ERROR("filename %s must have .jpg or .png extension\n", file_name);
         ret = -1;
+        ERROR("filename %s must have .jpg or .png extension\n", file_name);
     }
     if (ret != 0) {
         free(pixels);
