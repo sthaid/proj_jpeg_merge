@@ -198,14 +198,83 @@ error_return:
 
 // -----------------  JPEG COMPRESSION  ----------------------------------------------------
 
-//
-// not supported yet
-//
-
 int32_t write_jpeg_file(char* file_name, 
                        uint8_t * pixels, int32_t width, int32_t height)
 {
-    ERROR("not supported\n");
+    FILE                        * fp = NULL;
+    struct jpeg_compress_struct   cinfo; 
+    struct jpeg_error_mgr         err_mgr;
+
+    // open file_name
+    fp = fopen(file_name, "wb");
+    if (!fp) {
+        ERROR("fopen %s\n", file_name);
+        return -1;
+    }
+
+    // initailze setjmp, for use by the error exit override
+    if (setjmp(err_jmpbuf)) {
+        goto error_return;
+    }
+
+    // error management init:
+    // - override the error_exit routine
+    // - override the output_message routine
+    cinfo.err = jpeg_std_error(&err_mgr);
+    cinfo.err->error_exit = jpeg_decode_error_exit_override;
+    cinfo.err->output_message = jpeg_decode_output_message_override;
+
+    // initialize the jpeg compress object,
+    // supply fp to the jpeg encoder,
+    jpeg_create_compress(&cinfo);
+    jpeg_stdio_dest(&cinfo, fp);
+
+    // describe the input image
+    cinfo.image_width = width;
+    cinfo.image_height = height;
+    cinfo.input_components = 3;
+    cinfo.in_color_space = JCS_RGB;
+
+    // set default compression parameters
+    jpeg_set_defaults(&cinfo);
+
+    // initialize the compression
+    jpeg_start_compress(&cinfo, TRUE);
+
+    // loop over scanlines
+    uint8_t * inp = pixels;
+    while (cinfo.next_scanline < cinfo.image_height) {
+        int32_t   i;
+        JSAMPLE   row[1000000];
+        JSAMPROW  scanline[1] = { row };
+        uint8_t * r = row;
+
+        // convert scanline pixelformat from 
+        // SDL_PIXELFORMAT_ABGR8888 to JCS_RGB
+        for (i = 0; i < cinfo.image_width; i++) {
+            r[0] = inp[0];
+            r[1] = inp[1];
+            r[2] = inp[2];
+            inp += 4;
+            r   += 3;
+        }
+
+        // write the JCS_RGB scanline
+        jpeg_write_scanlines(&cinfo, scanline, 1);
+    }
+
+    // finish compress
+    jpeg_finish_compress(&cinfo);
+
+    // success return
+    jpeg_destroy_compress(&cinfo);
+    fclose(fp);
+    return 0;
+
+    // error return
+error_return:
+    jpeg_destroy_compress(&cinfo);
+    fclose(fp);
     return -1;
 }
 

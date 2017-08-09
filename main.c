@@ -35,7 +35,8 @@ SOFTWARE.
 //                 be set appropriately
 //     -c NUM    : initial number of columns, default is
 //                 based on number of images and layout
-//     -f NAME   : output filename (without extension), default 'out'
+//     -f NAME   : output filename, must have .jpg or .png extension,
+//                 default 'out.jpg'
 //     -l LAYOUT : 1 = equal size; 2 = first image double size, default 1
 //     -b COLOR  : select border color, default GREEN
 //     -z        : enable batch mode
@@ -50,11 +51,6 @@ SOFTWARE.
 //         -  : decrease number of columns
 //         +  : increase number of columns
 //     The window can also be resized using the mouse.
-//
-
-//
-// XXX Possible Future Enhancements
-// - add option to output in jpeg format
 //
 
 #include <stdio.h>
@@ -132,7 +128,7 @@ int main(int argc, char **argv)
     static int32_t  max_pane;
     static image_t  image[MAX_IMAGE];
     static int32_t  max_image;
-    static char     filename_out[PATH_MAX];
+    static char     output_filename[PATH_MAX];
     static int32_t  border_color;
     static bool     batch_mode;
     static int32_t  max_texture_dim;
@@ -156,7 +152,7 @@ int main(int argc, char **argv)
     //
 
     // initialize non zero variables
-    strcpy(filename_out, "out");
+    strcpy(output_filename, "out.jpg");
     border_color = GREEN;
 
     // get options
@@ -191,9 +187,17 @@ int main(int argc, char **argv)
                 FATAL("invalid '-c %s'\n", optarg);
             }
             break;
-        case 'f':
-            strcpy(filename_out, optarg);
-            break;
+        case 'f': {
+            size_t len;
+            strcpy(output_filename, optarg);
+            len = strlen(output_filename);
+            if ((len < 5) || 
+                (strcmp(output_filename+len-4, ".png") != 0 &&
+                 strcmp(output_filename+len-4, ".jpg") != 0))
+            {
+                FATAL("invalid '-f %s'\n", optarg);
+            }
+            break; }
         case 'l':
             if ((sscanf(optarg, "%d", &layout) != 1) ||
                 (layout != LAYOUT_EQUAL_SIZE && 
@@ -312,14 +316,12 @@ int main(int argc, char **argv)
         //    exit pgm
         // endif
         if (batch_mode) {
-            char filename[PATH_MAX];
             // sleep for 2 secs
             sleep(2);
-            // write png file
+            // write jpg or png file, depending on output_filename extension
             rect_t rect = {0, 0, win_width_used, win_height_used};
-            sprintf(filename, "%s.png", filename_out);
-            INFO("writing %s, width=%d height=%d\n", filename_out, win_width_used, win_height_used); 
-            sdl_print_screen(filename, false, &rect);
+            INFO("writing %s, width=%d height=%d\n", output_filename, win_width_used, win_height_used); 
+            sdl_print_screen(output_filename, false, &rect);
             // exit pgm
             exit(1);
         }
@@ -337,12 +339,10 @@ int main(int argc, char **argv)
             case SDL_EVENT_QUIT: case 'q':    // quit
                 done = true;
                 break;
-            case 'w': {                       // write the png file
-                char filename[PATH_MAX];
+            case 'w': {                       // write jpg or png file, depending on output_filename extension
                 rect_t rect = {0, 0, win_width_used, win_height_used};
-                sprintf(filename, "%s.png", filename_out);
-                INFO("writing %s, width=%d height=%d\n", filename_out, win_width_used, win_height_used); 
-                sdl_print_screen(filename, true, &rect);
+                INFO("writing %s, width=%d height=%d\n", output_filename, win_width_used, win_height_used); 
+                sdl_print_screen(output_filename, true, &rect);
                 redraw = true;
                 break; }
             case '-': case '+': case '=': {   // chagne cols
@@ -399,7 +399,8 @@ OPTIONS\n\
                 be set appropriately\n\
     -c NUM    : initial number of columns, default is\n\
                 based on number of images and layout\n\
-    -f NAME   : output filename (without extension), default 'out'\n\
+    -f NAME   : output filename, must have .jpg or .png extension,\n\
+                default 'out.jpg'\n\
     -l LAYOUT : 1 = equal size; 2 = first image double size, default 1\n\
     -b COLOR  : select border color, default GREEN\n\
     -z        : enable batch mode\n\

@@ -28,20 +28,22 @@ SOFTWARE.
 #include <stddef.h>
 #include <unistd.h>
 #include <string.h>
+#include <unistd.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <limits.h>
+#include <time.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include <SDL.h>
 #include <SDL_ttf.h>
 #include <SDL_mixer.h>
-#include <png.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #include "util_sdl.h"
 #include "util_sdl_button_sound.h"
 #include "util_png.h"
+#include "util_jpeg.h"
 #include "util_misc.h"
 
 //
@@ -601,7 +603,7 @@ sdl_event_t * sdl_poll_event(void)
                 time_t t = time(NULL);
 
                 localtime_r(&t, &tm);
-                sprintf(filename, "%s%sscreenshot_%2.2d%2.2d%2.2d_%2.2d%2.2d%2.2d.png",
+                sprintf(filename, "%s%sscreenshot_%2.2d%2.2d%2.2d_%2.2d%2.2d%2.2d.jpg",
                         sdl_screenshot_prefix,
                         sdl_screenshot_prefix[0] != '\0' ? "_" : "",
                         tm.tm_year-100, tm.tm_mon+1, tm.tm_mday,
@@ -737,7 +739,7 @@ void sdl_print_screen(char *file_name, bool flash_display, rect_t * rect_arg)
 
     uint8_t * pixels = NULL;
     SDL_Rect  rect;
-    int32_t   ret;
+    int32_t   ret, len;
 
     // allocate memory for pixels
     pixels = calloc(1, sdl_win_height*sdl_win_width*BYTES_PER_PIXEL);
@@ -775,10 +777,20 @@ void sdl_print_screen(char *file_name, bool flash_display, rect_t * rect_arg)
         return;
     }
 
-    // write pixels to file_name, png format
-    ret = write_png_file(file_name, pixels, rect.w, rect.h);
-    if (ret != 0) {
+    // write pixels to file_name, 
+    // filename must have .jpg or .png extension
+    len = strlen(file_name);
+    if (len > 4 && strcmp(file_name+len-4, ".jpg") == 0) {
+        ret = write_jpeg_file(file_name, pixels, rect.w, rect.h);
+        ERROR("write_jpeg_file %s failed\n", file_name);
+    } else if (len > 4 && strcmp(file_name+len-4, ".png") == 0) {
+        ret = write_png_file(file_name, pixels, rect.w, rect.h);
         ERROR("write_png_file %s failed\n", file_name);
+    } else {
+        ERROR("filename %s must have .jpg or .png extension\n", file_name);
+        ret = -1;
+    }
+    if (ret != 0) {
         free(pixels);
         return;
     }
