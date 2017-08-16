@@ -1,8 +1,9 @@
 # OVERVIEW
 
 This program combines multiple jpeg and png files into a single jpeg or png file.
+Each of the images can optionally be cropped.
 
-Sample out.jpg is included.
+Sample out.jpg and out-crop.jpg are included.
 
 This program does the following:
 - reads the jpeg and png files 

@@ -20,6 +20,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+// XXX need to adjust font size when window size changes
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -121,7 +123,6 @@ static uint32_t         sdl_color_to_rgba[] = {
 //
 
 static void sdl_exit_handler(void);
-static void play_event_sound(void);
 static void sdl_set_color(int32_t color); 
 
 // 
@@ -492,7 +493,6 @@ sdl_event_t * sdl_poll_event(void)
                 }
             }
             if (event.event != SDL_EVENT_NONE) {
-                play_event_sound();
                 break;
             }
 
@@ -608,7 +608,6 @@ sdl_event_t * sdl_poll_event(void)
                         sdl_screenshot_prefix[0] != '\0' ? "_" : "",
                         tm.tm_year-100, tm.tm_mon+1, tm.tm_mday,
                         tm.tm_hour, tm.tm_min, tm.tm_sec);
-                play_event_sound();
                 sdl_print_screen(filename,true,NULL);
                 event.event = SDL_EVENT_SCREENSHOT_TAKEN;
                 break;
@@ -649,15 +648,33 @@ sdl_event_t * sdl_poll_event(void)
                     possible_event = '?';
                 } else if (possible_event == SDL_EVENT_KEY_ESC) {
                     possible_event = SDL_EVENT_KEY_SHIFT_ESC;
+                } else if (possible_event == SDL_EVENT_KEY_UP_ARROW) {
+                    possible_event = SDL_EVENT_KEY_SHIFT_UP_ARROW;
+                } else if (possible_event == SDL_EVENT_KEY_DOWN_ARROW) {
+                    possible_event = SDL_EVENT_KEY_SHIFT_DOWN_ARROW;
+                } else if (possible_event == SDL_EVENT_KEY_LEFT_ARROW) {
+                    possible_event = SDL_EVENT_KEY_SHIFT_LEFT_ARROW;
+                } else if (possible_event == SDL_EVENT_KEY_RIGHT_ARROW) {
+                    possible_event = SDL_EVENT_KEY_SHIFT_RIGHT_ARROW;
+                } else if (possible_event == SDL_EVENT_KEY_TAB) {
+                    possible_event = SDL_EVENT_KEY_SHIFT_TAB;
                 }
             } else if (ctrl) {
-                if (possible_event == SDL_EVENT_KEY_LEFT_ARROW) {
+                if (possible_event == SDL_EVENT_KEY_UP_ARROW) {
+                    possible_event = SDL_EVENT_KEY_CTRL_UP_ARROW;
+                } else if (possible_event == SDL_EVENT_KEY_DOWN_ARROW) {
+                    possible_event = SDL_EVENT_KEY_CTRL_DOWN_ARROW;
+                } else if (possible_event == SDL_EVENT_KEY_LEFT_ARROW) {
                     possible_event = SDL_EVENT_KEY_CTRL_LEFT_ARROW;
                 } else if (possible_event == SDL_EVENT_KEY_RIGHT_ARROW) {
                     possible_event = SDL_EVENT_KEY_CTRL_RIGHT_ARROW;
                 }
             } else if (alt) {
-                if (possible_event == SDL_EVENT_KEY_LEFT_ARROW) {
+                if (possible_event == SDL_EVENT_KEY_UP_ARROW) {
+                    possible_event = SDL_EVENT_KEY_ALT_UP_ARROW;
+                } else if (possible_event == SDL_EVENT_KEY_DOWN_ARROW) {
+                    possible_event = SDL_EVENT_KEY_ALT_DOWN_ARROW;
+                } else if (possible_event == SDL_EVENT_KEY_LEFT_ARROW) {
                     possible_event = SDL_EVENT_KEY_ALT_LEFT_ARROW;
                 } else if (possible_event == SDL_EVENT_KEY_RIGHT_ARROW) {
                     possible_event = SDL_EVENT_KEY_ALT_RIGHT_ARROW;
@@ -669,7 +686,6 @@ sdl_event_t * sdl_poll_event(void)
                  sdl_event_reg_tbl[possible_event].type == SDL_EVENT_TYPE_TEXT))
             {
                 event.event = possible_event;
-                play_event_sound();
             }
             break; }
 
@@ -707,7 +723,6 @@ sdl_event_t * sdl_poll_event(void)
         case SDL_QUIT: {
             DEBUG("got event SDL_QUIT\n");
             event.event = SDL_EVENT_QUIT;
-            play_event_sound();
             break; }
 
         default: {
@@ -724,7 +739,7 @@ sdl_event_t * sdl_poll_event(void)
     return &event;
 }
 
-static void play_event_sound(void)   
+void sdl_play_event_sound(void)   
 {
     if (sdl_button_sound) {
         Mix_PlayChannel(-1, sdl_button_sound, 0);
@@ -735,18 +750,9 @@ static void play_event_sound(void)
 
 void sdl_print_screen(char *file_name, bool flash_display, rect_t * rect_arg) 
 {
-    #define BYTES_PER_PIXEL 4
-
     uint8_t * pixels = NULL;
     SDL_Rect  rect;
     int32_t   ret, len;
-
-    // allocate memory for pixels
-    pixels = calloc(1, sdl_win_height*sdl_win_width*BYTES_PER_PIXEL);
-    if (pixels == NULL) {
-        ERROR("allocate pixels failed\n");
-        return;
-    }
 
     // if caller has supplied region to print then 
     //   init rect to print with caller supplied position
@@ -763,6 +769,13 @@ void sdl_print_screen(char *file_name, bool flash_display, rect_t * rect_arg)
         rect.y = 0;
         rect.w = sdl_win_width;
         rect.h = sdl_win_height;   
+    }
+
+    // allocate memory for pixels
+    pixels = calloc(1, rect.w * rect.h * BYTES_PER_PIXEL);
+    if (pixels == NULL) {
+        ERROR("allocate pixels failed\n");
+        return;
     }
 
     // copy entire display to pixels
@@ -813,7 +826,7 @@ void sdl_print_screen(char *file_name, bool flash_display, rect_t * rect_arg)
         usleep(250000);
     }
 
-    // free allocated memory
+    // free pixels
     free(pixels);
 }
 
@@ -1007,6 +1020,51 @@ texture_t sdl_create_texture(int32_t w, int32_t h)
     return (texture_t)texture;
 }
 
+texture_t sdl_create_texture_from_pane_pixels(rect_t * pane_arg)
+{
+    texture_t texture;
+    int32_t ret;
+    uint8_t * pixels;
+    SDL_Rect pane;
+
+    // init pane from pane_arg, 
+    // this is just a copy because they are differnet types
+    pane.x = pane_arg->x;
+    pane.y = pane_arg->y;
+    pane.w = pane_arg->w;
+    pane.h = pane_arg->h;
+
+    // allocate memory for the pixels
+    pixels = calloc(1, pane.h * pane.w * BYTES_PER_PIXEL);
+    if (pixels == NULL) {
+        ERROR("allocate pixels failed\n");
+        return NULL;
+    }
+
+    // read the pixels
+    ret = SDL_RenderReadPixels(sdl_renderer, 
+                               &pane,  
+                               SDL_PIXELFORMAT_ABGR8888, 
+                               pixels, 
+                               pane.w * BYTES_PER_PIXEL);
+    if (ret < 0) {
+        ERROR("SDL_RenderReadPixels, %s\n", SDL_GetError());
+        free(pixels);
+        return NULL;
+    }
+
+    // create the texture, and
+    // update the texture with the pixels
+    texture = sdl_create_texture(pane.w, pane.h);
+    sdl_update_texture(texture, pixels, pane.w);
+
+    // free pixels
+    free(pixels);
+
+    // return the texture
+    return texture;
+}
+
 texture_t sdl_create_filled_circle_texture(int32_t radius, int32_t color)
 {
     int32_t width = 2 * radius + 1;
@@ -1051,7 +1109,7 @@ texture_t sdl_create_filled_circle_texture(int32_t radius, int32_t color)
         return NULL;
     }
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
-    SDL_UpdateTexture(texture, NULL, pixels, width*4);
+    SDL_UpdateTexture(texture, NULL, pixels, width*BYTES_PER_PIXEL);
 
     // return texture
     return (texture_t)texture;
@@ -1105,9 +1163,9 @@ void sdl_update_texture(texture_t texture, uint8_t * pixels, int32_t pitch)
     sdl_query_texture(texture, &width, &height);
 
     SDL_UpdateTexture((SDL_Texture*)texture,
-                      NULL,            // update entire texture
-                      pixels,          // pixels
-                      pitch*4);        // pitch
+                      NULL,                   // update entire texture
+                      pixels,                 // pixels
+                      pitch*BYTES_PER_PIXEL); // pitch  
 }
 
 void sdl_query_texture(texture_t texture, int32_t * width, int32_t * height)

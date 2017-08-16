@@ -54,6 +54,7 @@ SOFTWARE.
 // - determine what the following code does, and would it be helpful
 //      int32_t number_of_passes = png_set_interlace_handling(png_ptr);
 //      png_read_update_info(png_ptr, png_info);
+// - implement max_image_dim
 //
 
 //

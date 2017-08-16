@@ -29,41 +29,50 @@ SOFTWARE.
 
 // events
 // - no event
-#define SDL_EVENT_NONE                 0
+#define SDL_EVENT_NONE                   0
 // - ascii events 
-#define SDL_EVENT_KEY_BS               8
-#define SDL_EVENT_KEY_TAB              9
-#define SDL_EVENT_KEY_ENTER            13
-#define SDL_EVENT_KEY_ESC              27
+#define SDL_EVENT_KEY_BS                 8
+#define SDL_EVENT_KEY_TAB                9
+#define SDL_EVENT_KEY_ENTER              13
+#define SDL_EVENT_KEY_ESC                27
 // - special keys
-#define SDL_EVENT_KEY_HOME             130
-#define SDL_EVENT_KEY_END              131
-#define SDL_EVENT_KEY_PGUP             132
-#define SDL_EVENT_KEY_PGDN             133
-#define SDL_EVENT_KEY_UP_ARROW         134
-#define SDL_EVENT_KEY_DOWN_ARROW       135
-#define SDL_EVENT_KEY_LEFT_ARROW       136
-#define SDL_EVENT_KEY_RIGHT_ARROW      137
-#define SDL_EVENT_KEY_CTRL_LEFT_ARROW  138
-#define SDL_EVENT_KEY_CTRL_RIGHT_ARROW 139
-#define SDL_EVENT_KEY_ALT_LEFT_ARROW   140
-#define SDL_EVENT_KEY_ALT_RIGHT_ARROW  141
-#define SDL_EVENT_KEY_SHIFT_ESC        142
-#define SDL_EVENT_KEY_SHIFT            143
-#define SDL_EVENT_KEY_UNSHIFT          144
+#define SDL_EVENT_KEY_HOME               130
+#define SDL_EVENT_KEY_END                131
+#define SDL_EVENT_KEY_PGUP               132
+#define SDL_EVENT_KEY_PGDN               133
+#define SDL_EVENT_KEY_UP_ARROW           134
+#define SDL_EVENT_KEY_DOWN_ARROW         135
+#define SDL_EVENT_KEY_LEFT_ARROW         136
+#define SDL_EVENT_KEY_RIGHT_ARROW        137
+#define SDL_EVENT_KEY_SHIFT_UP_ARROW     138
+#define SDL_EVENT_KEY_SHIFT_DOWN_ARROW   139
+#define SDL_EVENT_KEY_SHIFT_LEFT_ARROW   140
+#define SDL_EVENT_KEY_SHIFT_RIGHT_ARROW  141
+#define SDL_EVENT_KEY_CTRL_UP_ARROW      142
+#define SDL_EVENT_KEY_CTRL_DOWN_ARROW    143
+#define SDL_EVENT_KEY_CTRL_LEFT_ARROW    144
+#define SDL_EVENT_KEY_CTRL_RIGHT_ARROW   145
+#define SDL_EVENT_KEY_ALT_UP_ARROW       146
+#define SDL_EVENT_KEY_ALT_DOWN_ARROW     147
+#define SDL_EVENT_KEY_ALT_LEFT_ARROW     148
+#define SDL_EVENT_KEY_ALT_RIGHT_ARROW    149
+#define SDL_EVENT_KEY_SHIFT_TAB          150
+#define SDL_EVENT_KEY_SHIFT_ESC          151
+#define SDL_EVENT_KEY_SHIFT              152
+#define SDL_EVENT_KEY_UNSHIFT            153
 // - window
-#define SDL_EVENT_WIN_SIZE_CHANGE      160
-#define SDL_EVENT_WIN_MINIMIZED        161
-#define SDL_EVENT_WIN_RESTORED         162
+#define SDL_EVENT_WIN_SIZE_CHANGE        160
+#define SDL_EVENT_WIN_MINIMIZED          161
+#define SDL_EVENT_WIN_RESTORED           162
 // - screenshot
-#define SDL_EVENT_SCREENSHOT_TAKEN     170
+#define SDL_EVENT_SCREENSHOT_TAKEN       170
 // - quit
-#define SDL_EVENT_QUIT                 180
+#define SDL_EVENT_QUIT                   180
 // - available to be defined by users
-#define SDL_EVENT_USER_START           200  
-#define SDL_EVENT_USER_END             999  
+#define SDL_EVENT_USER_START             200  
+#define SDL_EVENT_USER_END               999  
 // - max event
-#define SDL_EVENT_MAX                  1000
+#define SDL_EVENT_MAX                    1000
 
 // event types
 #define SDL_EVENT_TYPE_NONE         0
@@ -72,9 +81,6 @@ SOFTWARE.
 #define SDL_EVENT_TYPE_MOUSE_MOTION 3
 #define SDL_EVENT_TYPE_MOUSE_WHEEL  4
 #define SDL_EVENT_TYPE_KEY          5
-
-// pane border width
-#define PANE_BORDER_WIDTH 2
 
 // event data structure
 typedef struct {
@@ -110,6 +116,13 @@ typedef struct {
 #define GRAY       8
 #define WHITE      9
 #define BLACK      10
+
+//
+// misc defines
+// 
+
+#define PANE_BORDER_WIDTH 2
+#define BYTES_PER_PIXEL   4
 
 //
 // typedefs
@@ -151,6 +164,7 @@ int32_t sdl_font_char_height(int32_t fid);
 // event support
 void sdl_event_register(int32_t event_id, int32_t event_type, rect_t * pos);
 sdl_event_t * sdl_poll_event(void);
+void sdl_play_event_sound(void);
 
 // render text
 void sdl_render_text(rect_t * pane, int32_t row, int32_t col, int32_t font_id, char * str, 
@@ -172,6 +186,8 @@ void sdl_update_texture(texture_t texture, uint8_t * pixels, int32_t pitch);
 void sdl_query_texture(texture_t texture, int32_t * width, int32_t * height);
 void sdl_render_texture(texture_t texture, rect_t * dstrect);
 void sdl_destroy_texture(texture_t texture);
+
+texture_t sdl_create_texture_from_pane_pixels(rect_t * pane);
 
 // predefined displays
 void sdl_display_get_string(int32_t count, ...);
