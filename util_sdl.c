@@ -790,6 +790,21 @@ void sdl_print_screen(char *file_name, bool flash_display, rect_t * rect_arg)
         return;
     }
 
+
+#if 1
+    // sanity check the pixels
+    { int32_t i, count = 0;
+    uint32_t *p = (uint32_t*)pixels;
+    for (i = 0; i < rect.w * rect.h; i++) {
+        if (p[i] != 0xff000000 && p[i] != 0xffffffff && p[i] != 0) {
+            count++;
+        }
+    }
+    if (count == 0) {
+        WARN("pixels returned by SDL_RenderReadPixels may be incorrect\n");
+    } }
+#endif
+
     // write pixels to file_name, 
     // filename must have .jpg or .png extension
     len = strlen(file_name);

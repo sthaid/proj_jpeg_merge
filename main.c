@@ -132,7 +132,19 @@ typedef struct {
 // variables
 //
 
-static int32_t layout = LAYOUT_EQUAL_SIZE;
+static int32_t   max_image;
+static image_t   image[MAX_IMAGE];
+static rect_t    pane[MAX_IMAGE], pane_full[MAX_IMAGE];
+static texture_t cached_texture[MAX_IMAGE];
+
+static int32_t   max_pane;
+
+static bool      crop_enabled;
+static int32_t   crop_idx;
+static crop_t    crop; 
+static crop_t    crop_uncropped;
+
+static int32_t   layout = LAYOUT_EQUAL_SIZE;
 
 static const border_color_t border_color_tbl[] = {
         { "PURPLE",     PURPLE     },
@@ -146,12 +158,15 @@ static const border_color_t border_color_tbl[] = {
         { "GRAY",       GRAY       },
         { "WHITE",      WHITE      },
         { "BLACK",      BLACK      },  };
+static int32_t  border_color;
+static char   * border_color_str;
 
 // 
 // prototypes
 //
 
 static void usage(void);
+void draw_images(void);
 static void layout_init(
     int32_t max_image, int32_t image_width, int32_t image_height,     // in
     int32_t * win_width, int32_t * win_height, int32_t * cols,        // in out
@@ -168,28 +183,12 @@ int main(int argc, char **argv)
     static int32_t  win_width, win_height;
     static int32_t  image_width, image_height;
     static int32_t  cols, min_cols, max_cols;
-
-    static rect_t   pane[MAX_IMAGE], pane_full[MAX_IMAGE];
-    static int32_t  max_pane;
-
-    static image_t  image[MAX_IMAGE];
-    static int32_t  max_image;
-
-    static bool     crop_enabled;
-    static int32_t  crop_idx;
-    static crop_t   crop; 
-    static crop_t   crop_uncropped;
-
     static char     output_filename[PATH_MAX];
-    static int32_t  border_color;
-    static char   * border_color_str;
     static bool     batch_mode;
     static int32_t  max_texture_dim;
     static bool     done;
     static bool     print_screen_request;
     static int32_t  i;
-
-    static texture_t cached_texture[MAX_IMAGE];
 
     // 
     // initialization
@@ -374,49 +373,12 @@ int main(int argc, char **argv)
         }
 
         // use sdl to draw each of the images to its pane
-        sdl_display_init();
-        for (i = 0; i < max_pane; i++) {
-            rect_t * texture_dest_pane = (border_color == NO_BORDER ? &pane_full[i] : &pane[i]);
-
-            // if image exists then render it, based on its crop value;
-            // if we have a cached texture then use the cached texture (it is more efficient)
-            if (image[i].width != 0) {
-                if (cached_texture[i] == NULL) {
-                    texture_t texture;
-                    texture = sdl_create_texture(
-                                    image[i].width * image[i].crop.w / 100,
-                                    image[i].height * image[i].crop.h / 100);
-                    sdl_update_texture(
-                                    texture, 
-                                    image[i].pixels + BYTES_PER_PIXEL * 
-                                        (image[i].width * image[i].crop.x / 100 + 
-                                         image[i].height * image[i].crop.y / 100 * image[i].width),
-                                    image[i].width);
-                    sdl_render_texture(texture, texture_dest_pane);
-                    sdl_destroy_texture(texture);
-                    cached_texture[i] = sdl_create_texture_from_pane_pixels(texture_dest_pane);
-                } else {
-                    sdl_render_texture(cached_texture[i], texture_dest_pane);
-                }
-            }
-
-            // if a border is needed then display the border
-            if (i < max_image && border_color != NO_BORDER) {
-                sdl_render_pane_border(&pane_full[i], border_color);
-            }
-
-            // if crop is enabled for the image currently being processed then 
-            // draw the crop rectangle
-            if (crop_enabled && i == crop_idx) {
-                rect_t r;
-                r.x = texture_dest_pane->w * crop.x / 100;
-                r.y = texture_dest_pane->h * crop.y / 100;
-                r.w = texture_dest_pane->w * crop.w / 100;
-                r.h = texture_dest_pane->h * crop.h / 100;
-                sdl_render_rect(texture_dest_pane, &r, 1, WHITE);
-            }
+        // XXX on some computers the draw_images needs to be done
+        //     twice when creating the output file; I don't know why
+        draw_images();
+        if (print_screen_request || batch_mode) {
+            draw_images();
         }
-        sdl_display_present();
 
         // if need to create the output_file, because either
         // processing the 'w' event, or in batch mode then ...
@@ -765,6 +727,57 @@ RUN TIME CONTROLS - WHEN NOT IN BATCH MODE\n\
         r                 reset the selected image to it's original size\n\
         R                 reset all images to their original size\n\
 ");
+}
+
+// -----------------  DRAW IMAGES  --------------------------------------------------------------
+
+void draw_images(void)
+{
+    static int32_t i;
+
+    sdl_display_init();
+    for (i = 0; i < max_pane; i++) {
+        rect_t * texture_dest_pane = (border_color == NO_BORDER ? &pane_full[i] : &pane[i]);
+
+        // if image exists then render it, based on its crop value;
+        // if we have a cached texture then use the cached texture (it is more efficient)
+        if (image[i].width != 0) {
+            if (cached_texture[i] == NULL) {
+                texture_t texture;
+                texture = sdl_create_texture(
+                                image[i].width * image[i].crop.w / 100,
+                                image[i].height * image[i].crop.h / 100);
+                sdl_update_texture(
+                                texture, 
+                                image[i].pixels + BYTES_PER_PIXEL * 
+                                    (image[i].width * image[i].crop.x / 100 + 
+                                     image[i].height * image[i].crop.y / 100 * image[i].width),
+                                image[i].width);
+                sdl_render_texture(texture, texture_dest_pane);
+                sdl_destroy_texture(texture);
+                cached_texture[i] = sdl_create_texture_from_pane_pixels(texture_dest_pane);
+            } else {
+                sdl_render_texture(cached_texture[i], texture_dest_pane);
+            }
+        }
+
+        // if a border is needed then display the border
+        if (i < max_image && border_color != NO_BORDER) {
+            sdl_render_pane_border(&pane_full[i], border_color);
+        }
+
+        // if crop is enabled for the image currently being processed then 
+        // draw the crop rectangle
+        if (crop_enabled && i == crop_idx) {
+            rect_t r;
+            r.x = texture_dest_pane->w * crop.x / 100;
+            r.y = texture_dest_pane->h * crop.y / 100;
+            r.w = texture_dest_pane->w * crop.w / 100;
+            r.h = texture_dest_pane->h * crop.h / 100;
+            sdl_render_rect(texture_dest_pane, &r, 1, WHITE);
+        }
+    }
+    sdl_display_present();
 }
 
 // -----------------  MULTIPLE LAYOUT SUPPORT  --------------------------------------------
