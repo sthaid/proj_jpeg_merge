@@ -107,12 +107,14 @@ SOFTWARE.
 
 #define DEFAULT_ASPECT_RATIO   1.333333
 
+#define CROP_STEP 0.5
+
 //
 // typedefs
 //
 
 typedef struct {
-    int32_t x, y, w, h;
+    double x, y, w, h;
 } crop_t;
 
 typedef struct {
@@ -279,7 +281,7 @@ int main(int argc, char **argv)
         case 'k': {
             int32_t image_idx;
             crop_t  crop;
-            if (sscanf(optarg, "%d,%d,%d,%d,%d", &image_idx, &crop.x, &crop.y, &crop.w, &crop.h) != 5) {
+            if (sscanf(optarg, "%d,%lf,%lf,%lf,%lf", &image_idx, &crop.x, &crop.y, &crop.w, &crop.h) != 5) {
                 FATAL("invalid '-k %s'\n", optarg);
             }
             if (image_idx < 0 || image_idx >= MAX_IMAGE ||
@@ -362,6 +364,15 @@ int main(int argc, char **argv)
         // get current window size
         sdl_get_state(&win_width, &win_height, NULL);
 
+        // sanitize crop
+        if (crop.x < 0) crop.x = 0;
+        if (crop.x > 98) crop.x = 98;
+        if (crop.x + crop.w >= 99.9999) crop.w = 99.9999 - crop.x;
+
+        if (crop.y < 0) crop.y = 0;
+        if (crop.y > 98) crop.y = 98;
+        if (crop.y + crop.h >= 99.9999) crop.h = 99.9999 - crop.y;
+
         // get pane locations for the current layout and window dims
         layout_get_panes(max_image, win_width, win_height, cols,   // in
                          pane, pane_full, &max_pane,               // out
@@ -394,7 +405,7 @@ int main(int argc, char **argv)
                     win_width_used, win_height_used, cols, output_filename, layout, border_color_str);
             for (i = 0; i < max_image; i++) {
                 if (memcmp(&image[i].crop, &crop_uncropped, sizeof(crop_t)) != 0) {
-                    p += sprintf(p, "-k %d,%d,%d,%d,%d ",
+                    p += sprintf(p, "-k %d,%g,%g,%g,%g ",
                                 i, image[i].crop.x, image[i].crop.y, image[i].crop.w, image[i].crop.h);
                 }
             }
@@ -503,7 +514,7 @@ int main(int argc, char **argv)
                     break;
                 }
                 if (crop.y > 0) {
-                    crop.y--;
+                    crop.y -= CROP_STEP;
                 }
                 break;
             case SDL_EVENT_KEY_DOWN_ARROW:
@@ -511,7 +522,7 @@ int main(int argc, char **argv)
                     break;
                 }
                 if (crop.y + crop.h < 100) {
-                    crop.y++;
+                    crop.y += CROP_STEP;
                 }
                 break;
             case SDL_EVENT_KEY_LEFT_ARROW:
@@ -519,7 +530,7 @@ int main(int argc, char **argv)
                     break;
                 }
                 if (crop.x > 0) {
-                    crop.x--;
+                    crop.x -= CROP_STEP;
                 }
                 break;
             case SDL_EVENT_KEY_RIGHT_ARROW:
@@ -527,25 +538,25 @@ int main(int argc, char **argv)
                     break;
                 }
                 if (crop.x + crop.w < 100) {
-                    crop.x++;
-                }
-                break;
-            case SDL_EVENT_KEY_SHIFT_UP_ARROW:
-                if (!crop_enabled) {
-                    break;
-                }
-                if (crop.h > 6) {
-                    crop.h -= 2;
-                    crop.y++;
+                    crop.x += CROP_STEP;
                 }
                 break;
             case SDL_EVENT_KEY_SHIFT_DOWN_ARROW:
                 if (!crop_enabled) {
                     break;
                 }
+                if (crop.h > 6) {
+                    crop.h -= CROP_STEP;
+                    crop.y += CROP_STEP/2;
+                }
+                break;
+            case SDL_EVENT_KEY_SHIFT_UP_ARROW:
+                if (!crop_enabled) {
+                    break;
+                }
                 if (crop.y + crop.h < 100 && crop.y > 0) {
-                    crop.h += 2;
-                    crop.y--;
+                    crop.h += CROP_STEP;
+                    crop.y -= CROP_STEP/2;
                 }
                 break;
             case SDL_EVENT_KEY_SHIFT_LEFT_ARROW:
@@ -553,8 +564,8 @@ int main(int argc, char **argv)
                     break;
                 }
                 if (crop.w > 6) {
-                    crop.w -= 2;
-                    crop.x++;
+                    crop.w -= CROP_STEP;
+                    crop.x += CROP_STEP/2;
                 }
                 break;
             case SDL_EVENT_KEY_SHIFT_RIGHT_ARROW:
@@ -562,8 +573,8 @@ int main(int argc, char **argv)
                     break;
                 }
                 if (crop.x + crop.w < 100 && crop.x > 0) {
-                    crop.w += 2;
-                    crop.x--;
+                    crop.w += CROP_STEP;
+                    crop.x -= CROP_STEP/2;
                 }
                 break;
             case '-':
@@ -571,10 +582,10 @@ int main(int argc, char **argv)
                     break;
                 }
                 if (crop.w > 6 && crop.h > 6) {
-                    crop.w -= 2;
-                    crop.h -= 2;
-                    crop.x++;
-                    crop.y++;
+                    crop.w -= CROP_STEP;
+                    crop.h -= CROP_STEP;
+                    crop.x += CROP_STEP/2;
+                    crop.y += CROP_STEP/2;
                 }
                 break;
             case '+': case '=':
@@ -584,10 +595,10 @@ int main(int argc, char **argv)
                 if ((crop.y + crop.h < 100 && crop.y > 0) &&
                     (crop.x + crop.w < 100 && crop.x > 0)) 
                 {
-                    crop.w += 2;
-                    crop.h += 2;
-                    crop.x--;
-                    crop.y--;
+                    crop.w += CROP_STEP;
+                    crop.h += CROP_STEP;
+                    crop.x -= CROP_STEP/2;
+                    crop.y -= CROP_STEP/2;
                 }
                 break;
             case SDL_EVENT_KEY_ESC:
@@ -745,13 +756,13 @@ void draw_images(void)
             if (cached_texture[i] == NULL) {
                 texture_t texture;
                 texture = sdl_create_texture(
-                                image[i].width * image[i].crop.w / 100,
-                                image[i].height * image[i].crop.h / 100);
+                                nearbyint(image[i].width * image[i].crop.w / 100),
+                                nearbyint(image[i].height * image[i].crop.h / 100));
                 sdl_update_texture(
-                                texture, 
-                                image[i].pixels + BYTES_PER_PIXEL * 
-                                    (image[i].width * image[i].crop.x / 100 + 
-                                     image[i].height * image[i].crop.y / 100 * image[i].width),
+                                texture,
+                                image[i].pixels + BYTES_PER_PIXEL *
+                                    (  (int)nearbyint(image[i].width * image[i].crop.x / 100) +
+                                       (int)nearbyint(image[i].height * image[i].crop.y / 100) * image[i].width  ),
                                 image[i].width);
                 sdl_render_texture(texture, texture_dest_pane);
                 sdl_destroy_texture(texture);
@@ -774,7 +785,7 @@ void draw_images(void)
             r.y = texture_dest_pane->h * crop.y / 100;
             r.w = texture_dest_pane->w * crop.w / 100;
             r.h = texture_dest_pane->h * crop.h / 100;
-            sdl_render_rect(texture_dest_pane, &r, 1, WHITE);
+            sdl_render_rect(texture_dest_pane, &r, 1, BLACK);
         }
     }
     sdl_display_present();
