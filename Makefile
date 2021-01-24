@@ -22,8 +22,8 @@ DEP=$(SRC_JPEG_MERGE:.c=.d)
 all: $(TARGETS)
 
 image_merge: $(OBJ_JPEG_MERGE) 
-	$(CC) -pthread -lrt -lm -lpng -ljpeg -lSDL2 -lSDL2_ttf -lSDL2_mixer \
-              -o $@ $(OBJ_JPEG_MERGE)
+	$(CC) -o $@ $(OBJ_JPEG_MERGE) \
+              -pthread -lrt -lm -lpng -ljpeg -lSDL2 -lSDL2_ttf -lSDL2_mixer
 
 -include $(DEP)
 
